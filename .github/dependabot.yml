@@ -1,0 +1,21 @@
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+    # Maks 5 åpne PR-er samtidig (hindrer støy)
+    open-pull-requests-limit: 5
+
+    # Mer ryddige commits/PR-er
+    labels:
+      - "dependencies"
+      - "security"
+
+    # Ikke bry deg om major-versjoner automatisk
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
