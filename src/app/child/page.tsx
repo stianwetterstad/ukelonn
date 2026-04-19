@@ -10,19 +10,27 @@ export default function ChildPage() {
         In-memory placeholder checklist. No real personal data is included.
       </p>
       <ul className="mt-6 space-y-2">
-        {checklist.map((item) => (
-          <li key={item.id} className="rounded-md border border-gray-200 p-3">
-            <div className="flex items-center gap-3">
-              <input
-                checked={item.done}
-                id={`check-${item.id}`}
-                readOnly
-                type="checkbox"
-              />
-              <label htmlFor={`check-${item.id}`}>{item.task}</label>
-            </div>
-          </li>
-        ))}
+        {checklist.map((item) => {
+          const checkboxId = `check-${item.id}`;
+          const labelId = `check-label-${item.id}`;
+
+          return (
+            <li key={item.id} className="rounded-md border border-gray-200 p-3">
+              <div className="flex items-center gap-3">
+                <input
+                  aria-labelledby={labelId}
+                  checked={item.done}
+                  id={checkboxId}
+                  readOnly
+                  type="checkbox"
+                />
+                <label htmlFor={checkboxId} id={labelId}>
+                  {item.task}
+                </label>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </main>
   );
