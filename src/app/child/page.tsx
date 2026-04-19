@@ -13,7 +13,12 @@ export default function ChildPage() {
         {checklist.map((item) => (
           <li key={item.id} className="rounded-md border border-gray-200 p-3">
             <label className="flex items-center gap-3">
-              <input checked={item.done} readOnly type="checkbox" />
+              <input
+                aria-label={item.task}
+                checked={item.done}
+                readOnly
+                type="checkbox"
+              />
               <span>{item.task}</span>
             </label>
           </li>
