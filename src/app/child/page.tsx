@@ -12,15 +12,15 @@ export default function ChildPage() {
       <ul className="mt-6 space-y-2">
         {checklist.map((item) => (
           <li key={item.id} className="rounded-md border border-gray-200 p-3">
-            <label className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <input
-                aria-label={item.task}
                 checked={item.done}
+                id={`check-${item.id}`}
                 readOnly
                 type="checkbox"
               />
-              <span>{item.task}</span>
-            </label>
+              <label htmlFor={`check-${item.id}`}>{item.task}</label>
+            </div>
           </li>
         ))}
       </ul>
