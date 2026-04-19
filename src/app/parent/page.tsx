@@ -63,7 +63,12 @@ export default function ParentPage() {
       setUser(u);
       setAuthLoading(false);
     });
-    return unsub;
+    // Fallback: if auth never resolves (e.g. network issues), stop loading after 5s
+    const timeout = setTimeout(() => setAuthLoading(false), 5000);
+    return () => {
+      unsub();
+      clearTimeout(timeout);
+    };
   }, []);
 
   // ── Pending queue ──
