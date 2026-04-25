@@ -265,6 +265,7 @@ await setDoc(
   { baseAllowance: INITIAL_BASE_ALLOWANCE, balance: 0, savingsGoal: "" },
   { merge: true },
 );
+  }, []);
 
   // ── Derived ──
   const store = useMemo<TaskStore>(() => {
@@ -317,12 +318,14 @@ await setDoc(
     };
   }, [tasks, baseAllowance, balance, savingsGoal, childToggle, setApproval, approveAllPending, setBaseAllowance, setBalance, setSavingsGoal, addTask, editTask, deleteTask, upsertStandardTask, removeStandardTask, seedInitialTasks, resetAllData]);
 
-  return <TaskContext value={store}>{children}</TaskContext>;
+  return <TaskContext.Provider value={store}>{children}</TaskContext.Provider>;
 }
 
-// ─── Hook ───────────────────────────────────────────────────────────────────
+// Hook
 export function useTaskStore(): TaskStore {
   const ctx = useContext(TaskContext);
   if (!ctx) throw new Error("useTaskStore must be used within a TaskProvider");
   return ctx;
 }
+
+
