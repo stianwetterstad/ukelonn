@@ -26,4 +26,15 @@ const messaging = getMessaging(app);
 
 onBackgroundMessage(messaging, (payload) => {
   console.log("[FCM SW] Background message received:", payload);
+
+  const title = payload.notification?.title ?? "Ukelonn";
+  const body = payload.notification?.body ?? "";
+  const icon = payload.notification?.icon ?? "/ukelonn/icon-192.png";
+
+  self.registration.showNotification(title, {
+    body,
+    icon,
+    badge: "/ukelonn/icon-192.png",
+    data: payload.data ?? {},
+  });
 });

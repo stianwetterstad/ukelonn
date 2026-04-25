@@ -148,6 +148,62 @@ Expected output after deployment:
 3. Enter token → send
 4. Notification appears
 
+## Production Verification
+
+### Prod Test Steps
+
+Run these steps on production:
+
+1. Open [https://stian.github.io/ukelonn/debug](https://stian.github.io/ukelonn/debug)
+2. Accept notifications when prompted
+3. Copy the FCM token from the debug page (or browser console)
+4. Send a test message in Firebase Console (Cloud Messaging)
+5. Test both foreground and background delivery
+
+### Testing New Deployments
+
+After each GitHub Pages deployment (push to `main` or manual trigger):
+
+1. **Wait for deployment to complete** (check Actions tab for workflow status)
+
+2. **Open the debug page** → https://stian.github.io/ukelonn/debug
+   - Verify all indicators are green (✅)
+   - Note any issues
+
+3. **Run the quick checklist** in browser console (see above)
+
+4. **Test a manual push message**:
+   - Get FCM token from debug page or console
+   - Go to Firebase Console → Cloud Messaging → Send message
+   - Select **Devices** as target
+   - Paste token → Send
+   - **Foreground test**: Keep app in focus, verify notification appears in-app
+   - **Background test**: Minimize tab, send another message, verify OS notification appears
+
+5. **Verify token cleanup**:
+   - Firebase Console → Firestore → `families/family-default/devices/`
+   - Should see entries for active devices
+   - Entries are automatically deleted if FCM rejects them (invalid/expired tokens)
+
+---
+
+### Debug Page
+
+A live debug page is available at `/debug` on all environments (local dev, staging, production).
+
+Access it at:
+- **Local**: http://localhost:3000/ukelonn/debug
+- **Production**: https://stian.github.io/ukelonn/debug
+
+The debug page shows:
+- ✅ HTTPS/security status
+- ✅ Service worker registrations and scope
+- ✅ Manifest and icon loading status
+- ✅ Notification permission status
+- ✅ FCM token (if initialized)
+
+Use this page alongside the console tests above for a comprehensive verification.
+
 ## Configuration
 
 ### VAPID Key
