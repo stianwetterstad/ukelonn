@@ -8,6 +8,8 @@ export function FCMInitializer() {
   const pathname = usePathname();
 
   useEffect(() => {
+    const debug = process.env.NEXT_PUBLIC_DEBUG === "true";
+
     // FCM is off by default in dev to avoid accidental notification prompts/spam.
     // To test locally, set NEXT_PUBLIC_ENABLE_FCM=true in .env.local and restart the dev server.
     const enableFcm = process.env.NEXT_PUBLIC_ENABLE_FCM === "true";
@@ -21,26 +23,25 @@ export function FCMInitializer() {
 
     console.log("[FCM] Initializing (flag enabled)");
 
-    // DEBUG ONLY: visibility into notification/environment state on app load
-    const hasNotificationApi = typeof window !== "undefined" && "Notification" in window;
-    console.log("[DEBUG ONLY] window.Notification available:", hasNotificationApi);
-    if (hasNotificationApi) {
-      console.log("[DEBUG ONLY] Notification.permission on load:", Notification.permission);
+    if (debug) {
+      const hasNotificationApi = typeof window !== "undefined" && "Notification" in window;
+      console.log("[FCM] window.Notification available:", hasNotificationApi);
+      if (hasNotificationApi) {
+        console.log("[FCM] Notification.permission on load:", Notification.permission);
+      }
+
+      const { protocol, hostname } = window.location;
+      const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+      console.log("[FCM] window.location.protocol:", protocol);
+      if (protocol !== "https:" && !isLocalhost) {
+        console.warn(
+          "[FCM] Push notifications require HTTPS (localhost is allowed). Current origin may block notification prompts.",
+        );
+      }
     }
 
-    const protocol = window.location.protocol;
-    const host = window.location.hostname;
-    const isLocalhost = host === "localhost" || host === "127.0.0.1";
-    console.log("[DEBUG ONLY] window.location.protocol:", protocol);
-    if (protocol !== "https:" && !isLocalhost) {
-      console.warn(
-        "[DEBUG ONLY] Push notifications usually require HTTPS (localhost is allowed). Current origin may block notification prompts.",
-      );
-    }
-
-    // Check if service worker is supported and registered
     if (!("serviceWorker" in navigator)) {
-      console.warn("Service Workers not supported");
+      console.warn("[FCM] Service Workers not supported");
       return;
     }
 
@@ -58,15 +59,15 @@ export function FCMInitializer() {
       try {
         const token = await initializeFCM(role);
         if (token) {
-          console.log("FCM initialized successfully, token:", token);
+          console.log("[FCM] Initialized successfully, token:", token);
         }
       } catch (error) {
-        console.error("FCM initialization error:", error);
+        console.error("[FCM] Initialization error:", error);
       }
     };
 
-    // Wait a bit for service worker to be ready
-    setTimeout(initFCM, 1000);
+    // initializeFCM waits for SW activation internally — no artificial delay needed.
+    void initFCM();
   }, [pathname]);
 
   return null;

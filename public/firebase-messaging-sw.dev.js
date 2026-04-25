@@ -13,4 +13,15 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log("[FCM SW DEV] Background message:", payload);
+
+  const title = payload.notification?.title ?? "Ukelonn";
+  const body = payload.notification?.body ?? "";
+  const icon = payload.notification?.icon ?? "/ukelonn/icon-192.png";
+
+  self.registration.showNotification(title, {
+    body,
+    icon,
+    badge: "/ukelonn/icon-192.png",
+    data: payload.data ?? {},
+  });
 });
