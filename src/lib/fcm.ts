@@ -1,7 +1,7 @@
 "use client";
 
 import { app, getMessagingInstance } from "@/lib/firebase";
-import { getToken, isSupported, onMessage, type Messaging } from "firebase/messaging";
+import { getToken, isSupported, onMessage, type MessagePayload, type Messaging } from "firebase/messaging";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getApps } from "firebase/app";
@@ -115,7 +115,9 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
   }
 
   const fcmVapidKey = process.env.NEXT_PUBLIC_FCM_VAPID_KEY;
-  console.log("[FCM] NEXT_PUBLIC_FCM_VAPID_KEY before guard:", fcmVapidKey);
+  if (debugFirebase) {
+    console.log("[FCM] NEXT_PUBLIC_FCM_VAPID_KEY present:", !!fcmVapidKey);
+  }
   if (!fcmVapidKey) {
     console.warn("[FCM] Skipping initialization: NEXT_PUBLIC_FCM_VAPID_KEY is missing");
     return null;
@@ -143,13 +145,17 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
     }
 
     // Request permission
-    console.log("[FCM] Requesting notification permission...");
+    if (debugFirebase) {
+      console.log("[FCM] Requesting notification permission...");
+    }
     const permissionGranted = await requestNotificationPermission();
     if (!permissionGranted) {
       console.warn("[FCM] Notification permission denied");
       return null;
     }
-    console.log("[FCM] Notification permission granted");
+    if (debugFirebase) {
+      console.log("[FCM] Notification permission granted");
+    }
 
     // Register service worker explicitly
     if (!("serviceWorker" in navigator)) {
@@ -166,14 +172,18 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
       await cleanupDevServiceWorkers(scope);
 
       if (isProd) {
-        console.log("[DEBUG] NODE_ENV/isProd =", process.env.NODE_ENV, isProd);
+        if (debugFirebase) {
+          console.log("[FCM] Registering module SW:", swUrl, "scope:", scope);
+        }
         reg = await navigator.serviceWorker.register(swUrl, {
           scope,
           type: "module",
           updateViaCache: "none",
         });
       } else {
-        console.log("[DEBUG] NODE_ENV/isProd =", process.env.NODE_ENV, isProd);
+        if (debugFirebase) {
+          console.log("[FCM] Registering compat SW:", swUrl, "scope:", scope);
+        }
         reg = await navigator.serviceWorker.register(swUrl, {
           scope,
           updateViaCache: "none",
@@ -206,7 +216,12 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
     try {
       token = await getToken(messaging, tokenOptions);
     } catch (tokenError) {
-      const error = tokenError as any;
+      const error = tokenError as {
+        name?: string;
+        code?: string;
+        message?: string;
+        stack?: string;
+      };
       console.error("[FCM] getToken failed after service worker activation", {
         name: error?.name,
         code: error?.code,
@@ -256,7 +271,7 @@ async function saveFCMToken(token: string, role: DeviceRole): Promise<void> {
 }
 
 function setupMessageListener(messaging: Messaging): void {
-  onMessage(messaging, (payload) => {
+  onMessage(messaging, (payload: MessagePayload) => {
     console.log("Message received (foreground):", payload);
 
     // Message received while app is in foreground

@@ -33,7 +33,6 @@ export default function ParentPage() {
     baseAllowance,
     totalWeekly,
     approvedWeeklyCount,
-    baseEarned,
     maxBonus,
     approvedBonusSum,
     totalEarned,
