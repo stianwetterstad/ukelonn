@@ -5,7 +5,7 @@ import { TaskProvider } from "@/lib/TaskContext";
 export const metadata: Metadata = {
   title: "Family Allowance App",
   description: "Next.js TypeScript PWA starter for family allowance tracking",
-  manifest: "/manifest.webmanifest",
+  manifest: "/ukelonn/manifest.webmanifest",
   applicationName: "Family Allowance App",
 };
 
