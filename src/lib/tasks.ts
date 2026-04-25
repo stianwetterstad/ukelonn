@@ -10,6 +10,8 @@ export type Task = {
   id: string;
   title: string;
   type: "weekly" | "bonus";
+  /** Origin of task creation for notification filtering */
+  source?: "seed" | "manual";
   /** Which weekday this task belongs to (only for type=weekly) */
   day?: string;
   /** Subtitle hint shown on child page (optional) */
@@ -20,6 +22,8 @@ export type Task = {
   checkedByChild: boolean;
   /** Parent approval status */
   approvalStatus: ApprovalStatus;
+  /** If set, this task is linked to a standard task document */
+  standardTaskId?: string;
 };
 
 // ─── Initial seed data ──────────────────────────────────────────────────────

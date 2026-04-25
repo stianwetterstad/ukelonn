@@ -1,17 +1,38 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getMessaging, isSupported, type Messaging } from "firebase/messaging";
+import { firebaseConfig } from "@/lib/firebaseConfig";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCEXSpT2oODyKR9c4i320sItCgivkXqsxU",
-  authDomain: "ukelonn-1cdbf.firebaseapp.com",
-  projectId: "ukelonn-1cdbf",
-  storageBucket: "ukelonn-1cdbf.appspot.com",
-  messagingSenderId: "775837524786",
-  appId: "1:775837524786:web:04b45500b222c815c1bad2",
-};
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-const app = initializeApp(firebaseConfig);
+const DEBUG_FIREBASE = process.env.NEXT_PUBLIC_DEBUG === "true";
 
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+if (DEBUG_FIREBASE) {
+  console.log("[FB] projectId/appId", firebaseConfig.projectId, firebaseConfig.appId);
+  console.log("[FB] getApps().length", getApps().length);
+}
+
+let messagingInstancePromise: Promise<Messaging | null> | null = null;
+
+export async function getMessagingInstance(): Promise<Messaging | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  if (!messagingInstancePromise) {
+    messagingInstancePromise = (async () => {
+      const supported = await isSupported().catch(() => false);
+      if (!supported) {
+        return null;
+      }
+      return getMessaging(app);
+    })();
+  }
+
+  return messagingInstancePromise;
+}
+
+export { app, auth, db };

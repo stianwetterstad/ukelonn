@@ -18,6 +18,7 @@ import {
   deleteDoc,
   setDoc,
   getDocs,
+  deleteField,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { seedInitialTasks as seedInitialTasksFn } from "@/lib/seedInitialTasks";
@@ -34,10 +35,16 @@ function taskDocRef(id: string) {
   return doc(db, "families", FAMILY_ID, "tasks", id);
 }
 
+function settingsDocRef() {
+  return doc(db, "families", FAMILY_ID, "settings", "main");
+}
+
 // ─── Context value type ─────────────────────────────────────────────────────
 type TaskStore = {
   tasks: Task[];
   baseAllowance: number;
+  balance: number;
+  savingsGoal: string;
 
   // Derived
   weeklyTasks: Task[];
@@ -58,11 +65,17 @@ type TaskStore = {
   setApproval: (id: string, status: ApprovalStatus) => void;
   approveAllPending: () => void;
   setBaseAllowance: (value: number) => void;
+  setBalance: (value: number) => Promise<void>;
+  setSavingsGoal: (value: string) => Promise<void>;
 
   // CRUD (parent)
-  addTask: (task: Omit<Task, "id" | "checkedByChild" | "approvalStatus">) => void;
-  editTask: (id: string, updates: Partial<Pick<Task, "title" | "valueNok" | "subtitle">>) => void;
+  addTask: (task: Omit<Task, "id" | "checkedByChild" | "approvalStatus">) => Promise<string>;
+  editTask: (id: string, updates: Partial<Pick<Task, "title" | "valueNok" | "subtitle">>) => Promise<void>;
   deleteTask: (id: string) => void;
+
+  // Standard task helpers
+  upsertStandardTask: (task: Task) => Promise<string>;
+  removeStandardTask: (standardTaskId: string, taskId: string) => Promise<void>;
 
   // Admin
   seedInitialTasks: () => Promise<void>;
@@ -75,6 +88,8 @@ const TaskContext = createContext<TaskStore | null>(null);
 export function TaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [baseAllowance, setBaseAllowanceLocal] = useState(INITIAL_BASE_ALLOWANCE);
+  const [balance, setBalanceLocal] = useState(0);
+  const [savingsGoal, setSavingsGoalLocal] = useState("");
 
   // ── Firestore realtime listeners ──
   // Firestore brukes som source of truth og gir realtime sync:
@@ -95,6 +110,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
             valueNok: data.valueNok as number | undefined,
             checkedByChild: data.checkedByChild as boolean,
             approvalStatus: (data.approvalStatus as ApprovalStatus) ?? "none",
+            standardTaskId: data.standardTaskId as string | undefined,
           };
         });
         setTasks(mapped);
@@ -102,13 +118,18 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     );
 
     const unsubSettings = onSnapshot(
-      doc(db, "families", FAMILY_ID, "settings", "main"),
+      settingsDocRef(),
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
           if (typeof data.baseAllowance === "number") {
             setBaseAllowanceLocal(data.baseAllowance);
           }
+          setBalanceLocal(typeof data.balance === "number" ? data.balance : 0);
+          setSavingsGoalLocal(typeof data.savingsGoal === "string" ? data.savingsGoal : "");
+        } else {
+          setBalanceLocal(0);
+          setSavingsGoalLocal("");
         }
       },
     );
@@ -147,29 +168,81 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   // ── Base allowance → Firestore ──
   const setBaseAllowance = useCallback((value: number) => {
     setDoc(
-      doc(db, "families", FAMILY_ID, "settings", "main"),
+      settingsDocRef(),
       { baseAllowance: value },
       { merge: true },
     );
   }, []);
 
+  const setBalance = useCallback(async (value: number) => {
+    const nextValue = Math.max(0, Number(value) || 0);
+    setBalanceLocal(nextValue);
+    await setDoc(settingsDocRef(), { balance: nextValue }, { merge: true });
+  }, []);
+
+  const setSavingsGoal = useCallback(async (value: string) => {
+    setSavingsGoalLocal(value);
+    await setDoc(settingsDocRef(), { savingsGoal: value }, { merge: true });
+  }, []);
+
+  // ── Standard task helpers ──
+  const upsertStandardTask = useCallback(async (task: Task): Promise<string> => {
+    const standardTasksRef = collection(db, "families", FAMILY_ID, "standardTasks");
+    const standardDoc: Record<string, unknown> = {
+      title: task.title,
+      type: task.type,
+    };
+    if (task.day !== undefined) standardDoc.day = task.day;
+    if (task.subtitle !== undefined) standardDoc.subtitle = task.subtitle;
+    if (task.valueNok !== undefined) standardDoc.valueNok = task.valueNok;
+
+    if (task.standardTaskId) {
+      await setDoc(doc(standardTasksRef, task.standardTaskId), standardDoc, { merge: true });
+      return task.standardTaskId;
+    } else {
+      const newRef = await addDoc(standardTasksRef, standardDoc);
+      await updateDoc(taskDocRef(task.id), { standardTaskId: newRef.id });
+      return newRef.id;
+    }
+  }, []);
+
+  const removeStandardTask = useCallback(async (standardTaskId: string, taskId: string): Promise<void> => {
+    await deleteDoc(doc(db, "families", FAMILY_ID, "standardTasks", standardTaskId));
+    await updateDoc(taskDocRef(taskId), { standardTaskId: deleteField() });
+  }, []);
+
   // ── CRUD ──
   const addTask = useCallback(
-    (partial: Omit<Task, "id" | "checkedByChild" | "approvalStatus">) => {
-      addDoc(collection(db, "families", FAMILY_ID, "tasks"), {
+    async (partial: Omit<Task, "id" | "checkedByChild" | "approvalStatus">): Promise<string> => {
+      const ref = await addDoc(collection(db, "families", FAMILY_ID, "tasks"), {
         ...partial,
+        source: "manual",
         checkedByChild: false,
         approvalStatus: "none",
       });
+      return ref.id;
     },
     [],
   );
 
   const editTask = useCallback(
-    (id: string, updates: Partial<Pick<Task, "title" | "valueNok" | "subtitle">>) => {
-      updateDoc(taskDocRef(id), updates);
+    async (id: string, updates: Partial<Pick<Task, "title" | "valueNok" | "subtitle">>) => {
+      await updateDoc(taskDocRef(id), updates);
+      const task = tasks.find((t) => t.id === id);
+      if (task?.standardTaskId) {
+        const standardUpdates: Record<string, unknown> = {};
+        if (updates.title !== undefined) standardUpdates.title = updates.title;
+        if (updates.valueNok !== undefined) standardUpdates.valueNok = updates.valueNok;
+        if (updates.subtitle !== undefined) standardUpdates.subtitle = updates.subtitle;
+        if (Object.keys(standardUpdates).length > 0) {
+          await updateDoc(
+            doc(db, "families", FAMILY_ID, "standardTasks", task.standardTaskId),
+            standardUpdates,
+          );
+        }
+      }
     },
-    [],
+    [tasks],
   );
 
   const deleteTask = useCallback((id: string) => {
@@ -185,8 +258,13 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const resetAllData = useCallback(async () => {
     const tasksSnap = await getDocs(collection(db, "families", FAMILY_ID, "tasks"));
     const deletes = tasksSnap.docs.map((d) => deleteDoc(d.ref));
-    deletes.push(deleteDoc(doc(db, "families", FAMILY_ID, "settings", "main")));
     await Promise.all(deletes);
+
+await setDoc(
+  settingsDocRef(),
+  { baseAllowance: INITIAL_BASE_ALLOWANCE, balance: 0, savingsGoal: "" },
+  { merge: true },
+);
   }, []);
 
   // ── Derived ──
@@ -212,6 +290,8 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     return {
       tasks,
       baseAllowance,
+      balance,
+      savingsGoal,
       weeklyTasks,
       bonusTasks,
       dayGroups,
@@ -226,20 +306,26 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       setApproval,
       approveAllPending,
       setBaseAllowance,
+      setBalance,
+      setSavingsGoal,
       addTask,
       editTask,
       deleteTask,
+      upsertStandardTask,
+      removeStandardTask,
       seedInitialTasks,
       resetAllData,
     };
-  }, [tasks, baseAllowance, childToggle, setApproval, approveAllPending, setBaseAllowance, addTask, editTask, deleteTask, seedInitialTasks, resetAllData]);
+  }, [tasks, baseAllowance, balance, savingsGoal, childToggle, setApproval, approveAllPending, setBaseAllowance, setBalance, setSavingsGoal, addTask, editTask, deleteTask, upsertStandardTask, removeStandardTask, seedInitialTasks, resetAllData]);
 
-  return <TaskContext value={store}>{children}</TaskContext>;
+  return <TaskContext.Provider value={store}>{children}</TaskContext.Provider>;
 }
 
-// ─── Hook ───────────────────────────────────────────────────────────────────
+// Hook
 export function useTaskStore(): TaskStore {
   const ctx = useContext(TaskContext);
   if (!ctx) throw new Error("useTaskStore must be used within a TaskProvider");
   return ctx;
 }
+
+
