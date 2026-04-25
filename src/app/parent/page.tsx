@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { getBasePath } from "@/lib/basePath";
+import { getMessagingServiceWorkerPath, initializeFCM } from "@/lib/fcm";
 import { useTaskStore } from "@/lib/TaskContext";
 import type { ApprovalStatus } from "@/lib/tasks";
 
@@ -10,9 +12,9 @@ import type { ApprovalStatus } from "@/lib/tasks";
 type ModalState =
   | null
   | { mode: "add-weekday"; day: string }
-  | { mode: "edit-weekday"; taskId: string; text: string }
+  | { mode: "edit-weekday"; taskId: string; text: string; standardTaskId?: string }
   | { mode: "add-bonus" }
-  | { mode: "edit-bonus"; taskId: string; text: string; value: number };
+  | { mode: "edit-bonus"; taskId: string; text: string; value: number; standardTaskId?: string };
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function ParentPage() {
@@ -41,6 +43,8 @@ export default function ParentPage() {
     addTask,
     editTask,
     deleteTask,
+    upsertStandardTask,
+    removeStandardTask,
     childToggle,
     seedInitialTasks,
     resetAllData,
@@ -56,6 +60,10 @@ export default function ParentPage() {
   const [modal, setModal] = useState<ModalState>(null);
   const [modalText, setModalText] = useState("");
   const [modalValue, setModalValue] = useState("");
+  const [modalIsStandard, setModalIsStandard] = useState(false);
+  const [fcmStatus, setFcmStatus] = useState<"idle" | "testing" | "granted" | "denied" | "error">("idle");
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [fcmMessage, setFcmMessage] = useState<string | null>(null);
 
   // ── Auth listener (onAuthStateChanged holder auth-state synkronisert) ──
   useEffect(() => {
@@ -85,30 +93,59 @@ export default function ParentPage() {
     if (m.mode === "edit-weekday") {
       setModalText(m.text);
       setModalValue("");
+      setModalIsStandard(Boolean(m.standardTaskId));
     } else if (m.mode === "edit-bonus") {
       setModalText(m.text);
       setModalValue(String(m.value));
+      setModalIsStandard(Boolean(m.standardTaskId));
     } else {
       setModalText("");
       setModalValue("");
+      setModalIsStandard(false);
     }
   }
 
-  function saveModal() {
+  async function saveModal() {
     if (!modal) return;
     const text = modalText.trim();
     if (!text) return;
 
     if (modal.mode === "add-weekday") {
-      addTask({ title: text, type: "weekly", day: modal.day });
+      const newId = await addTask({ title: text, type: "weekly", day: modal.day });
+      if (modalIsStandard) {
+        await upsertStandardTask({
+          id: newId, title: text, type: "weekly", day: modal.day,
+          checkedByChild: false, approvalStatus: "none",
+        });
+      }
     } else if (modal.mode === "edit-weekday") {
-      editTask(modal.taskId, { title: text });
+      await editTask(modal.taskId, { title: text });
+      const wasStandard = Boolean(modal.standardTaskId);
+      if (modalIsStandard && !wasStandard) {
+        const task = tasks.find((t) => t.id === modal.taskId);
+        if (task) await upsertStandardTask({ ...task, title: text });
+      } else if (!modalIsStandard && wasStandard) {
+        await removeStandardTask(modal.standardTaskId!, modal.taskId);
+      }
     } else if (modal.mode === "add-bonus") {
       const val = Math.max(1, Number(modalValue) || 5);
-      addTask({ title: text, type: "bonus", valueNok: val });
+      const newId = await addTask({ title: text, type: "bonus", valueNok: val });
+      if (modalIsStandard) {
+        await upsertStandardTask({
+          id: newId, title: text, type: "bonus", valueNok: val,
+          checkedByChild: false, approvalStatus: "none",
+        });
+      }
     } else if (modal.mode === "edit-bonus") {
       const val = Math.max(1, Number(modalValue) || 5);
-      editTask(modal.taskId, { title: text, valueNok: val });
+      await editTask(modal.taskId, { title: text, valueNok: val });
+      const wasStandard = Boolean(modal.standardTaskId);
+      if (modalIsStandard && !wasStandard) {
+        const task = tasks.find((t) => t.id === modal.taskId);
+        if (task) await upsertStandardTask({ ...task, title: text, valueNok: val });
+      } else if (!modalIsStandard && wasStandard) {
+        await removeStandardTask(modal.standardTaskId!, modal.taskId);
+      }
     }
     setModal(null);
   }
@@ -128,6 +165,67 @@ export default function ParentPage() {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : "Innlogging feilet");
+    }
+  }
+
+  // DEBUG ONLY: manual notification test triggered by user click
+  async function testNotifications() {
+    setFcmStatus("testing");
+    setFcmToken(null);
+    setFcmMessage(null);
+
+    const hasNotificationApi = typeof window !== "undefined" && "Notification" in window;
+    console.log("[TEST FCM] Notification API available:", hasNotificationApi);
+
+    if (!hasNotificationApi) {
+      console.warn("[TEST FCM] Notification API is not supported in this browser.");
+      setFcmStatus("error");
+      return;
+    }
+
+    console.log("[TEST FCM] Current permission state:", Notification.permission);
+    const basePath = getBasePath();
+    const swPath = getMessagingServiceWorkerPath();
+    console.log("[TEST FCM] basePath:", basePath || "<root>");
+    console.log("[TEST FCM] swPath:", swPath);
+
+    try {
+      const response = await fetch(swPath, { cache: "no-store" });
+      console.log("[TEST FCM] fetch(swPath).status:", response.status);
+
+      if (response.status !== 200) {
+        const message = `Service worker not found at ${swPath}`;
+        console.error("[TEST FCM]", message);
+        setFcmMessage(message);
+        setFcmStatus("error");
+        return;
+      }
+    } catch (error) {
+      const message = `Service worker not found at ${swPath}`;
+      console.error("[TEST FCM] Failed to fetch service worker:", error);
+      setFcmMessage(message);
+      setFcmStatus("error");
+      return;
+    }
+    
+    // Request permission via initializeFCM (which now handles SW registration)
+    try {
+      const token = await initializeFCM("parent");
+      
+      if (token) {
+        console.log("[TEST FCM] ✅ FCM token received:", token.substring(0, 20) + "...");
+        setFcmToken(token);
+        setFcmMessage(`Service worker OK at ${swPath}`);
+        setFcmStatus("granted");
+      } else {
+        console.warn("[TEST FCM] ⚠️  initializeFCM returned null (permission may have been denied)");
+        setFcmMessage(Notification.permission === "granted" ? `No FCM token returned for ${swPath}` : null);
+        setFcmStatus(Notification.permission === "granted" ? "error" : "denied");
+      }
+    } catch (error) {
+      console.error("[TEST FCM] ❌ FCM initialization error:", error);
+      setFcmMessage(`FCM initialization failed for ${swPath}`);
+      setFcmStatus("error");
     }
   }
 
@@ -193,32 +291,80 @@ export default function ParentPage() {
         </button>
       </header>
 
-      {/* ── Admin actions ── */}
-      <div className="px-4 py-3">
-        {tasks.length === 0 ? (
-          <button
-            disabled={adminLoading}
-            onClick={async () => {
-              setAdminLoading(true);
-              try { await seedInitialTasks(); } finally { setAdminLoading(false); }
-            }}
-            className="w-full rounded-lg bg-green-500 py-2.5 text-sm font-bold text-white active:bg-green-600 disabled:opacity-50"
-          >
-            {adminLoading ? "Oppretter…" : "Opprett standardoppgaver"}
-          </button>
-        ) : (
-          <button
-            disabled={adminLoading}
-            onClick={async () => {
-              if (!confirm("Er du sikker på at du vil nullstille alle data? Dette kan ikke angres.")) return;
-              setAdminLoading(true);
-              try { await resetAllData(); } finally { setAdminLoading(false); }
-            }}
-            className="w-full rounded-lg bg-red-500 py-2.5 text-sm font-bold text-white active:bg-red-600 disabled:opacity-50"
-          >
-            {adminLoading ? "Nullstiller…" : "Nullstill alle data"}
-          </button>
+      {/* DEBUG ONLY: remove after notification debugging */}
+      <div className="px-4 pt-3 pb-2">
+        <button
+          type="button"
+          onClick={() => void testNotifications()}
+          disabled={fcmStatus === "testing"}
+          className="rounded-lg border border-dashed border-pink-300 bg-white px-3 py-2 text-sm font-bold text-pink-700 hover:bg-pink-50 disabled:opacity-50"
+        >
+          {fcmStatus === "testing" ? "Tester..." : "Test varsler"}
+        </button>
+        
+        {/* Status display */}
+        {fcmStatus !== "idle" && (
+          <div className="mt-2 rounded bg-white px-3 py-2 text-xs">
+            {fcmStatus === "testing" && <span className="text-blue-600">⏳ Tester...</span>}
+            {fcmStatus === "granted" && (
+              <div>
+                <span className="text-green-600">✅ Varsler aktivert</span>
+                {fcmMessage && <div className="mt-1 text-gray-600">{fcmMessage}</div>}
+                {fcmToken && (
+                  <div className="mt-1 break-all font-mono text-gray-600">
+                    Token: {fcmToken.substring(0, 30)}...
+                  </div>
+                )}
+              </div>
+            )}
+            {fcmStatus === "denied" && (
+              <span className="text-orange-600">⛔ Varsler avvist</span>
+            )}
+            {fcmStatus === "error" && (
+              <div className="text-red-600">
+                <div>❌ Feil ved aktivering</div>
+                {fcmMessage && <div className="mt-1 break-all">{fcmMessage}</div>}
+              </div>
+            )}
+          </div>
         )}
+      </div>
+
+      {/* ── Admin panel ── */}
+      <div className="px-4 py-3">
+        <div className="rounded-xl border border-gray-300 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-extrabold uppercase tracking-wider text-black">
+            Admin
+          </h2>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              disabled={adminLoading || tasks.length > 0}
+              onClick={async () => {
+                setAdminLoading(true);
+                try { await seedInitialTasks(); } finally { setAdminLoading(false); }
+              }}
+              className="flex-1 rounded-lg bg-pink-600 py-2.5 text-sm font-bold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {adminLoading ? "Oppretter…" : "Opprett standardoppgaver"}
+            </button>
+            <button
+              disabled={adminLoading || tasks.length === 0}
+              onClick={async () => {
+                if (!confirm("Er du sikker på at du vil nullstille alle data? Dette kan ikke angres.")) return;
+                setAdminLoading(true);
+                try { await resetAllData(); } finally { setAdminLoading(false); }
+              }}
+              className="flex-1 rounded-lg bg-pink-600 py-2.5 text-sm font-bold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {adminLoading ? "Nullstiller…" : "Nullstill alle data"}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-black">
+            {tasks.length === 0
+              ? "Ingen oppgaver finnes – klikk «Opprett standardoppgaver» for å fylle inn standarddata."
+              : "Oppgaver finnes allerede – nullstill alle data før du kan opprette standardoppgaver på nytt."}
+          </p>
+        </div>
       </div>
 
       {/* ── Sticky summary bar ── */}
@@ -319,7 +465,7 @@ export default function ParentPage() {
                         )}
 
                         <button
-                          onClick={() => openModal({ mode: "edit-weekday", taskId: task.id, text: task.title })}
+                          onClick={() => openModal({ mode: "edit-weekday", taskId: task.id, text: task.title, standardTaskId: task.standardTaskId })}
                           className="shrink-0 rounded bg-blue-100 px-2 py-1 text-xs text-blue-700 active:bg-blue-200"
                         >✏️</button>
                         <button
@@ -375,7 +521,7 @@ export default function ParentPage() {
                   )}
 
                   <button
-                    onClick={() => openModal({ mode: "edit-bonus", taskId: b.id, text: b.title, value: b.valueNok ?? 0 })}
+                    onClick={() => openModal({ mode: "edit-bonus", taskId: b.id, text: b.title, value: b.valueNok ?? 0, standardTaskId: b.standardTaskId })}
                     className="shrink-0 rounded bg-blue-100 px-2 py-1 text-xs text-blue-700 active:bg-blue-200"
                   >✏️</button>
                   <button
@@ -412,6 +558,7 @@ export default function ParentPage() {
                 <input
                   type="number"
                   min={0}
+                  step={10}
                   value={baseAllowance}
                   onChange={(e) => setBaseAllowance(Math.max(0, Number(e.target.value) || 0))}
                   className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-pink-400"
@@ -465,6 +612,7 @@ export default function ParentPage() {
                 <input
                   type="number"
                   min={1}
+                  step={10}
                   value={modalValue}
                   onChange={(e) => setModalValue(e.target.value)}
                   placeholder="10"
@@ -472,6 +620,16 @@ export default function ParentPage() {
                 />
               </label>
             )}
+
+            <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={modalIsStandard}
+                onChange={(e) => setModalIsStandard(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 accent-pink-500"
+              />
+              Standardoppgave
+            </label>
 
             <div className="mt-5 flex gap-3">
               <button
