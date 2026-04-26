@@ -284,7 +284,7 @@ export default function ParentPage() {
       </div>
 
       {/* ── Til godkjenning ── */}
-      <section className="px-4 pt-4">
+      <section id="pending-approval" className="px-4 pt-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider text-pink-600">
             Til godkjenning ({pendingItems.length})

@@ -39,6 +39,7 @@ self.addEventListener("push", (event) => {
     body: "",
     icon: "/icon-192.png",
     badge: "/icon-192.png",
+    data: {},
   };
 
   if (event.data) {
@@ -61,6 +62,9 @@ self.addEventListener("push", (event) => {
       if (data.body) {
         notificationData.body = data.body;
       }
+      if (data.link && typeof data.link === "string") {
+        notificationData.data = { link: data.link };
+      }
     } catch (error) {
       console.error("Failed to parse push data:", error);
       if (event.data.text) {
@@ -76,27 +80,46 @@ self.addEventListener("push", (event) => {
       badge: notificationData.badge,
       tag: "ukelonn-notification",
       requireInteraction: false,
+      data: notificationData.data,
     })
   );
 });
+
+function resolveNotificationLink(data) {
+  const rawLink = typeof data?.link === "string" ? data.link : null;
+  if (!rawLink) {
+    return "/ukelonn/";
+  }
+
+  if (rawLink.startsWith("http://") || rawLink.startsWith("https://")) {
+    return rawLink;
+  }
+
+  return rawLink.startsWith("/") ? rawLink : `/ukelonn/${rawLink}`;
+}
 
 // Handle notification click
 self.addEventListener("notificationclick", (event) => {
   console.log("Notification clicked:", event.notification.title);
   event.notification.close();
 
+  const targetLink = resolveNotificationLink(event.notification.data);
+  const targetUrl = new URL(targetLink, self.location.origin).href;
+
   event.waitUntil(
-    clients.matchAll({ type: "window" }).then((windowClients) => {
-      // Check if there's already a window/tab open with the app
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (windowClients) => {
+      // Reuse an existing tab on this origin and navigate it to the target link.
       for (let i = 0; i < windowClients.length; i++) {
         const client = windowClients[i];
-        if (client.url === "/" || client.url.includes(self.location.origin)) {
-          return client.focus();
+        if (client.url.includes(self.location.origin)) {
+          await client.navigate(targetUrl);
+          await client.focus();
+          return;
         }
       }
-      // If not, open a new window/tab
+      // If not, open a new window/tab at the target link.
       if (clients.openWindow) {
-        return clients.openWindow("/");
+        await clients.openWindow(targetUrl);
       }
     })
   );

@@ -15,6 +15,7 @@ const FAMILY_ID = "family-default";
 // Keep all 2nd gen functions in the same region so Eventarc trigger validation matches.
 const FUNCTION_REGION = "europe-west4";
 const OSLO_TIME_ZONE = "Europe/Oslo";
+const APP_BASE_PATH = "/ukelonn";
 
 type DeviceRole = "parent" | "child";
 
@@ -30,6 +31,11 @@ type TaskDocument = {
 };
 
 type ApprovalStatus = NonNullable<TaskDocument["approvalStatus"]>;
+
+type PushOptions = {
+  link?: string;
+  data?: Record<string, string>;
+};
 
 const INVALID_TOKEN_ERROR_CODES = new Set<string>([
   "messaging/invalid-registration-token",
@@ -69,7 +75,8 @@ async function sendPushToRole(
   familyId: string,
   role: DeviceRole,
   title: string,
-  body: string
+  body: string,
+  options: PushOptions = {}
 ): Promise<void> {
   try {
     // Get all devices for a given role in the family.
@@ -94,12 +101,18 @@ async function sendPushToRole(
       return;
     }
 
+    const mergedData = {
+      ...(options.data ?? {}),
+      ...(options.link ? { link: options.link } : {}),
+    };
+
     // Send multicast message with modern Admin SDK API.
     const response = await messaging.sendEachForMulticast({
       notification: {
         title,
         body,
       },
+      ...(Object.keys(mergedData).length > 0 ? { data: mergedData } : {}),
       webpush: {
         notification: {
           title,
@@ -107,6 +120,7 @@ async function sendPushToRole(
           icon: "/icon-192.png",
           badge: "/icon-192.png",
         },
+        ...(options.link ? { fcmOptions: { link: options.link } } : {}),
       },
       tokens,
     });
@@ -131,12 +145,22 @@ async function sendPushToRole(
   }
 }
 
-async function sendPushToParents(familyId: string, title: string, body: string): Promise<void> {
-  await sendPushToRole(familyId, "parent", title, body);
+async function sendPushToParents(
+  familyId: string,
+  title: string,
+  body: string,
+  options: PushOptions = {}
+): Promise<void> {
+  await sendPushToRole(familyId, "parent", title, body, options);
 }
 
-async function sendPushToChildren(familyId: string, title: string, body: string): Promise<void> {
-  await sendPushToRole(familyId, "child", title, body);
+async function sendPushToChildren(
+  familyId: string,
+  title: string,
+  body: string,
+  options: PushOptions = {}
+): Promise<void> {
+  await sendPushToRole(familyId, "child", title, body, options);
 }
 
 function getTaskLabel(task: TaskDocument | undefined, fallback = "En oppgave"): string {
@@ -192,7 +216,8 @@ export const onTaskPendingApproval = onDocumentWritten(
       await sendPushToParents(
         familyId,
         "Ny oppgave til godkjenning",
-        `${taskLabel} er klar for godkjenning.`
+        `${taskLabel} er klar for godkjenning.`,
+        { link: `${APP_BASE_PATH}/parent/#pending-approval` }
       );
     }
   }
@@ -225,7 +250,8 @@ export const onTaskReviewedByParent = onDocumentWritten(
       await sendPushToChildren(
         familyId,
         "Oppgave godkjent ✅",
-        `${taskLabel} ble godkjent.`
+        `${taskLabel} ble godkjent.`,
+        { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
       );
       return;
     }
@@ -235,7 +261,8 @@ export const onTaskReviewedByParent = onDocumentWritten(
       await sendPushToChildren(
         familyId,
         "Oppgave trenger nytt forsok 🔁",
-        `${taskLabel} ble ikke godkjent ennå.`
+        `${taskLabel} ble ikke godkjent ennå.`,
+        { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
       );
     }
   }
@@ -305,7 +332,8 @@ export const onWeeklyAllowanceUnlocked = onDocumentWritten(
     await sendPushToChildren(
       familyId,
       "Ukelonn opptjent 🎉",
-      `Alle ${totalWeeklyTasks} ukesoppgaver er godkjent. Bra jobbet!`
+      `Alle ${totalWeeklyTasks} ukesoppgaver er godkjent. Bra jobbet!`,
+      { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
     );
   }
 );
@@ -351,7 +379,8 @@ export const weeklyReminderSunday = onSchedule(
     await sendPushToParents(
       FAMILY_ID,
       "Ny uke – gå gjennom oppgaver og nullstill",
-      "Planlegg uka med barnet ditt."
+      "Planlegg uka med barnet ditt.",
+      { link: `${APP_BASE_PATH}/parent/` }
     );
   }
 );
@@ -398,7 +427,8 @@ export const childDailyWeekdayReminder = onSchedule(
       await sendPushToChildren(
         familyId,
         "Husk dagens oppgaver ✅",
-        "Åpne appen og kryss av når du er ferdig."
+        "Åpne appen og kryss av når du er ferdig.",
+        { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
       );
     }
   }
@@ -445,7 +475,8 @@ export const parentEveningPendingSummary = onSchedule(
       await sendPushToParents(
         familyId,
         "Kveldssammendrag: godkjenning",
-        body
+        body,
+        { link: `${APP_BASE_PATH}/parent/#pending-approval` }
       );
     }
   }

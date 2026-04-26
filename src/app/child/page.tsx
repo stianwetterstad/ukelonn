@@ -94,7 +94,7 @@ export default function ChildPage() {
       <div className="overflow-hidden rounded-b-2xl shadow-lg">
 
         {/* ── Oppgaver (full bredde, egen rad) ── */}
-        <section className="bg-pink-50 p-4 md:p-6">
+        <section id="weekly-tasks" className="bg-pink-50 p-4 md:p-6">
           <h2 className="text-center text-sm font-bold uppercase tracking-wider text-pink-600 md:text-base">
             Ukelønn‑oppgaver (låser opp kr {baseAllowance} ✅)
           </h2>
