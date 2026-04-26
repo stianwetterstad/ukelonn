@@ -126,12 +126,7 @@ families/family-default/devices/{token}
 
 ## Deployment
 
-### Step 1: Build Frontend
-```bash
-npm run build
-```
-
-### Step 2: Deploy Cloud Functions
+### Step 1: Deploy Cloud Functions
 ```bash
 cd functions
 npm install
@@ -140,12 +135,9 @@ cd ..
 firebase deploy --only functions
 ```
 
-Or use the convenience script:
-```bash
-npm run firebase:deploy
-```
+The frontend is deployed separately via GitHub Pages by pushing to `main`.
 
-### Step 3: Verify Deployment
+### Step 2: Verify Deployment
 
 Check logs:
 ```bash

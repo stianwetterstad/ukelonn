@@ -46,9 +46,15 @@ export default function ChildPage() {
     savingsGoal,
     setBalance,
     setSavingsGoal,
+    childPinConfigured,
+    verifyChildPin,
   } = useTaskStore();
 
   const [balanceInput, setBalanceInput] = useState("");
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
+  const [unlockedThisSession, setUnlockedThisSession] = useState(false);
   const goals = useMemo(() => parseSavingsGoal(savingsGoal), [savingsGoal]);
 
   const doneCount = dayGroups
@@ -72,6 +78,36 @@ export default function ChildPage() {
     console.log("[Notify] Opened child page from push source:", source);
   }, []);
 
+  const hasPersistedUnlock =
+    typeof window !== "undefined" &&
+    window.sessionStorage.getItem("ukelonn-child-pin-unlocked") === "yes";
+  const isChildUnlocked = !childPinConfigured || unlockedThisSession || hasPersistedUnlock;
+
+  async function handleUnlockSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPinError("");
+
+    if (!/^\d{4}$/.test(pinInput)) {
+      setPinError("Skriv inn 4 siffer.");
+      return;
+    }
+
+    setPinBusy(true);
+    try {
+      const ok = await verifyChildPin(pinInput);
+      if (!ok) {
+        setPinError("Feil PIN.");
+        return;
+      }
+
+      setUnlockedThisSession(true);
+      window.sessionStorage.setItem("ukelonn-child-pin-unlocked", "yes");
+      setPinInput("");
+    } finally {
+      setPinBusy(false);
+    }
+  }
+
   function updateGoal(index: number, field: "name" | "price", value: string) {
     const nextGoals = goals.map((g, i) =>
         i === index
@@ -85,6 +121,43 @@ export default function ChildPage() {
   function weeksNeeded(price: number) {
     const remaining = Math.max(0, price - balance);
     return Math.ceil(remaining / baseAllowance);
+  }
+
+  if (!isChildUnlocked) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-pink-50 px-4">
+        <form
+          onSubmit={(e) => void handleUnlockSubmit(e)}
+          className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg"
+        >
+          <h1 className="text-center text-xl font-bold text-pink-700">Lås opp barnesiden</h1>
+          <p className="mt-2 text-center text-sm text-gray-500">Skriv inn 4-sifret PIN for å fortsette.</p>
+
+          <input
+            autoFocus
+            type="password"
+            inputMode="numeric"
+            maxLength={4}
+            value={pinInput}
+            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="••••"
+            className="mt-4 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-center text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-pink-400"
+          />
+
+          {pinError && (
+            <p className="mt-2 text-center text-sm font-medium text-red-600">{pinError}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={pinBusy}
+            className="mt-4 w-full rounded-lg bg-pink-500 py-2.5 text-sm font-bold text-white active:bg-pink-600 disabled:opacity-50"
+          >
+            {pinBusy ? "Sjekker..." : "Lås opp"}
+          </button>
+        </form>
+      </main>
+    );
   }
 
   return (

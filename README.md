@@ -79,7 +79,6 @@ For automated testing:
 - `npm run start` – run production server
 - `npm run functions:build` – compile Cloud Functions
 - `npm run functions:deploy` – deploy Cloud Functions to Firebase
-- `npm run firebase:deploy` – build app and deploy everything to Firebase
 
 ## Cloud Functions
 
@@ -89,10 +88,13 @@ See [functions/README.md](functions/README.md) for details on push notification 
 
 ### Production URL
 
-The app is deployed to GitHub Pages at:
-**https://stian.github.io/ukelonn/**
+The app frontend is deployed to GitHub Pages at:
+**https://stianwetterstad.github.io/ukelonn/**
 
 Note: The app uses `basePath: "/ukelonn"` for routing, so all app routes are served under this path.
+
+Firebase is used only for backend services such as Firestore, Auth, Cloud Messaging, and Cloud Functions.
+The web app itself is not hosted on Firebase.
 
 ### How to Deploy
 
@@ -152,7 +154,7 @@ The full checklist is written to the **workflow run summary** (Actions tab → s
 
 Before considering the production deployment complete, verify PWA and push notifications:
 
-**Quick Checklist** (run in browser console at **https://stian.github.io/ukelonn/**):
+**Quick Checklist** (run in browser console at **https://stianwetterstad.github.io/ukelonn/**):
 
 ```javascript
 (async () => {

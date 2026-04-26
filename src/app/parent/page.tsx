@@ -34,9 +34,12 @@ export default function ParentPage() {
     maxBonus,
     approvedBonusSum,
     totalEarned,
+    childPinConfigured,
     setApproval,
     approveAllPending,
     setBaseAllowance,
+    setChildPin,
+    clearChildPin,
     addTask,
     editTask,
     deleteTask,
@@ -58,6 +61,11 @@ export default function ParentPage() {
   const [modalText, setModalText] = useState("");
   const [modalValue, setModalValue] = useState("");
   const [modalIsStandard, setModalIsStandard] = useState(false);
+  const [childPinInput, setChildPinInput] = useState("");
+  const [childPinConfirm, setChildPinConfirm] = useState("");
+  const [childPinBusy, setChildPinBusy] = useState(false);
+  const [childPinMessage, setChildPinMessage] = useState("");
+  const [childPinError, setChildPinError] = useState("");
 
   // ── Auth listener (onAuthStateChanged holder auth-state synkronisert) ──
   useEffect(() => {
@@ -168,6 +176,54 @@ export default function ParentPage() {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : "Innlogging feilet");
+    }
+  }
+
+  async function handleSaveChildPin() {
+    setChildPinError("");
+    setChildPinMessage("");
+
+    if (!/^\d{4}$/.test(childPinInput)) {
+      setChildPinError("PIN må være nøyaktig 4 siffer.");
+      return;
+    }
+
+    if (childPinInput !== childPinConfirm) {
+      setChildPinError("PIN-feltene må være like.");
+      return;
+    }
+
+    setChildPinBusy(true);
+    try {
+      await setChildPin(childPinInput);
+      setChildPinInput("");
+      setChildPinConfirm("");
+      setChildPinMessage("PIN lagret og synkronisert.");
+    } catch (err: unknown) {
+      setChildPinError(err instanceof Error ? err.message : "Klarte ikke å lagre PIN.");
+    } finally {
+      setChildPinBusy(false);
+    }
+  }
+
+  async function handleResetChildPin() {
+    if (!confirm("Fjerne PIN for barnesiden?")) {
+      return;
+    }
+
+    setChildPinBusy(true);
+    setChildPinError("");
+    setChildPinMessage("");
+
+    try {
+      await clearChildPin();
+      setChildPinInput("");
+      setChildPinConfirm("");
+      setChildPinMessage("PIN er fjernet.");
+    } catch (err: unknown) {
+      setChildPinError(err instanceof Error ? err.message : "Klarte ikke å fjerne PIN.");
+    } finally {
+      setChildPinBusy(false);
     }
   }
 
@@ -472,6 +528,60 @@ export default function ParentPage() {
             <p className="mt-2 text-xs text-gray-500">
               Barnet må fullføre og få godkjent alle ukelønn-oppgaver for å tjene dette beløpet.
             </p>
+
+            <div className="mt-5 border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-bold text-gray-800">PIN for barnesiden</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Status: {childPinConfigured ? "Aktiv" : "Ikke satt"}. PIN synkroniseres på tvers av enheter.
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={childPinInput}
+                  onChange={(e) => setChildPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Ny 4-sifret PIN"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-pink-400"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={childPinConfirm}
+                  onChange={(e) => setChildPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Gjenta PIN"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-pink-400"
+                />
+              </div>
+
+              {childPinError && (
+                <p className="mt-2 text-xs font-medium text-red-600">{childPinError}</p>
+              )}
+              {childPinMessage && (
+                <p className="mt-2 text-xs font-medium text-green-700">{childPinMessage}</p>
+              )}
+
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  disabled={childPinBusy}
+                  onClick={() => void handleSaveChildPin()}
+                  className="rounded-lg bg-pink-500 px-4 py-2 text-sm font-bold text-white active:bg-pink-600 disabled:opacity-50"
+                >
+                  {childPinConfigured ? "Endre PIN" : "Lagre PIN"}
+                </button>
+                <button
+                  type="button"
+                  disabled={childPinBusy || !childPinConfigured}
+                  onClick={() => void handleResetChildPin()}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 active:bg-gray-100 disabled:opacity-50"
+                >
+                  Fjern PIN
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>

@@ -10,16 +10,5 @@
         "firebase-functions-debug.log"
       ]
     }
-  ],
-  "hosting": {
-    "site": "ukelonn-1cdbf",
-    "public": "out",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
-  }
+  ]
 }

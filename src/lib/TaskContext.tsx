@@ -39,12 +39,29 @@ function settingsDocRef() {
   return doc(db, "families", FAMILY_ID, "settings", "main");
 }
 
+function isValidChildPin(pin: string): boolean {
+  return /^\d{4}$/.test(pin);
+}
+
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function hashChildPin(pin: string): Promise<string> {
+  const input = new TextEncoder().encode(pin);
+  const digest = await crypto.subtle.digest("SHA-256", input);
+  return toHex(digest);
+}
+
 // ─── Context value type ─────────────────────────────────────────────────────
 type TaskStore = {
   tasks: Task[];
   baseAllowance: number;
   balance: number;
   savingsGoal: string;
+  childPinConfigured: boolean;
 
   // Derived
   weeklyTasks: Task[];
@@ -67,6 +84,9 @@ type TaskStore = {
   setBaseAllowance: (value: number) => void;
   setBalance: (value: number) => Promise<void>;
   setSavingsGoal: (value: string) => Promise<void>;
+  setChildPin: (pin: string) => Promise<void>;
+  clearChildPin: () => Promise<void>;
+  verifyChildPin: (pin: string) => Promise<boolean>;
 
   // CRUD (parent)
   addTask: (task: Omit<Task, "id" | "checkedByChild" | "approvalStatus">) => Promise<string>;
@@ -90,6 +110,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [baseAllowance, setBaseAllowanceLocal] = useState(INITIAL_BASE_ALLOWANCE);
   const [balance, setBalanceLocal] = useState(0);
   const [savingsGoal, setSavingsGoalLocal] = useState("");
+  const [childPinHash, setChildPinHash] = useState<string | null>(null);
 
   // ── Firestore realtime listeners ──
   // Firestore brukes som source of truth og gir realtime sync:
@@ -127,9 +148,11 @@ export function TaskProvider({ children }: { children: ReactNode }) {
           }
           setBalanceLocal(typeof data.balance === "number" ? data.balance : 0);
           setSavingsGoalLocal(typeof data.savingsGoal === "string" ? data.savingsGoal : "");
+          setChildPinHash(typeof data.childPinHash === "string" ? data.childPinHash : null);
         } else {
           setBalanceLocal(0);
           setSavingsGoalLocal("");
+          setChildPinHash(null);
         }
       },
     );
@@ -184,6 +207,33 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     setSavingsGoalLocal(value);
     await setDoc(settingsDocRef(), { savingsGoal: value }, { merge: true });
   }, []);
+
+  const setChildPin = useCallback(async (pin: string) => {
+    if (!isValidChildPin(pin)) {
+      throw new Error("PIN må være nøyaktig 4 siffer");
+    }
+
+    const nextHash = await hashChildPin(pin);
+    setChildPinHash(nextHash);
+    await setDoc(settingsDocRef(), { childPinHash: nextHash }, { merge: true });
+  }, []);
+
+  const clearChildPin = useCallback(async () => {
+    setChildPinHash(null);
+    await setDoc(settingsDocRef(), { childPinHash: deleteField() }, { merge: true });
+  }, []);
+
+  const verifyChildPin = useCallback(async (pin: string) => {
+    if (!childPinHash) {
+      return true;
+    }
+    if (!isValidChildPin(pin)) {
+      return false;
+    }
+
+    const hash = await hashChildPin(pin);
+    return hash === childPinHash;
+  }, [childPinHash]);
 
   // ── Standard task helpers ──
   const upsertStandardTask = useCallback(async (task: Task): Promise<string> => {
@@ -260,11 +310,16 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const deletes = tasksSnap.docs.map((d) => deleteDoc(d.ref));
     await Promise.all(deletes);
 
-await setDoc(
-  settingsDocRef(),
-  { baseAllowance: INITIAL_BASE_ALLOWANCE, balance: 0, savingsGoal: "" },
-  { merge: true },
-);
+    await setDoc(
+      settingsDocRef(),
+      {
+        baseAllowance: INITIAL_BASE_ALLOWANCE,
+        balance: 0,
+        savingsGoal: "",
+        childPinHash: deleteField(),
+      },
+      { merge: true },
+    );
   }, []);
 
   // ── Derived ──
@@ -292,6 +347,7 @@ await setDoc(
       baseAllowance,
       balance,
       savingsGoal,
+      childPinConfigured: childPinHash !== null,
       weeklyTasks,
       bonusTasks,
       dayGroups,
@@ -308,6 +364,9 @@ await setDoc(
       setBaseAllowance,
       setBalance,
       setSavingsGoal,
+      setChildPin,
+      clearChildPin,
+      verifyChildPin,
       addTask,
       editTask,
       deleteTask,
@@ -316,7 +375,7 @@ await setDoc(
       seedInitialTasks,
       resetAllData,
     };
-  }, [tasks, baseAllowance, balance, savingsGoal, childToggle, setApproval, approveAllPending, setBaseAllowance, setBalance, setSavingsGoal, addTask, editTask, deleteTask, upsertStandardTask, removeStandardTask, seedInitialTasks, resetAllData]);
+  }, [tasks, baseAllowance, balance, savingsGoal, childPinHash, childToggle, setApproval, approveAllPending, setBaseAllowance, setBalance, setSavingsGoal, setChildPin, clearChildPin, verifyChildPin, addTask, editTask, deleteTask, upsertStandardTask, removeStandardTask, seedInitialTasks, resetAllData]);
 
   return <TaskContext.Provider value={store}>{children}</TaskContext.Provider>;
 }

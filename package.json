@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "functions:build": "cd functions && npm run build",
-    "functions:deploy": "firebase deploy --only functions",
-    "firebase:deploy": "npm run build && firebase deploy"
+    "functions:deploy": "firebase deploy --only functions"
   },
   "dependencies": {
     "firebase": "^12.12.0",
