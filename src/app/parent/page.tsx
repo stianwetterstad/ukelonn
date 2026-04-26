@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTaskStore } from "@/lib/TaskContext";
@@ -14,6 +14,32 @@ type ModalState =
   | { mode: "edit-weekday"; taskId: string; text: string; standardTaskId?: string }
   | { mode: "add-bonus" }
   | { mode: "edit-bonus"; taskId: string; text: string; value: number; standardTaskId?: string };
+
+// ─── Savings goal helpers ─────────────────────────────────────────────────────
+type SavingsGoalItem = { name: string; price: number };
+
+const DEFAULT_GOALS: SavingsGoalItem[] = [
+  { name: "", price: 0 },
+  { name: "", price: 0 },
+  { name: "", price: 0 },
+];
+
+function parseSavingsGoal(value: string): SavingsGoalItem[] {
+  if (!value) return DEFAULT_GOALS;
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return DEFAULT_GOALS;
+    return DEFAULT_GOALS.map((_, i) => {
+      const item = parsed[i] as Partial<SavingsGoalItem> | undefined;
+      return {
+        name: typeof item?.name === "string" ? item.name : "",
+        price: Math.max(0, Number(item?.price) || 0),
+      };
+    });
+  } catch {
+    return DEFAULT_GOALS;
+  }
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function ParentPage() {
@@ -35,10 +61,14 @@ export default function ParentPage() {
     maxBonus,
     approvedBonusSum,
     totalEarned,
+    balance,
+    savingsGoal,
     childPinConfigured,
     setApproval,
     approveAllPending,
     setBaseAllowance,
+    setBalance,
+    setSavingsGoal,
     setChildPin,
     clearChildPin,
     addTask,
@@ -53,6 +83,24 @@ export default function ParentPage() {
 
   // ── Admin loading state ──
   const [adminLoading, setAdminLoading] = useState(false);
+
+  // ── Balance / savings state ──
+  const [balanceInput, setBalanceInput] = useState("");
+  const goals = useMemo(() => parseSavingsGoal(savingsGoal), [savingsGoal]);
+
+  function updateGoal(index: number, field: "name" | "price", value: string) {
+    const nextGoals = goals.map((g, i) =>
+      i === index
+        ? { ...g, [field]: field === "price" ? Math.max(0, Number(value) || 0) : value }
+        : g
+    );
+    void setSavingsGoal(JSON.stringify(nextGoals));
+  }
+
+  function weeksNeeded(price: number) {
+    const remaining = Math.max(0, price - balance);
+    return Math.ceil(remaining / baseAllowance);
+  }
 
   // ── UI state ──
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -613,6 +661,106 @@ export default function ParentPage() {
           </div>
         )}
       </section>
+
+      {/* ── Saldo + Sparemål ── */}
+      <div className="mt-4 grid grid-cols-1 px-4 md:grid-cols-[1fr_1fr] md:gap-4">
+
+        {/* ── Saldo ── */}
+        <section className="flex flex-col items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 p-4 md:p-5">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-purple-600 md:text-base">
+            Saldo 🏦
+          </h2>
+          <p className="text-xs text-purple-500">Penger på konto nå</p>
+          <p className="text-4xl font-extrabold text-purple-900">kr {balance},–</p>
+          <div className="flex w-full gap-2">
+            <input
+              type="number"
+              min="0"
+              step={10}
+              placeholder="Ny saldo"
+              value={balanceInput}
+              onChange={(e) => setBalanceInput(e.target.value)}
+              className="w-full rounded-lg border border-purple-200 px-3 py-2 text-center text-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const val = Math.max(0, Number(balanceInput) || 0);
+                void setBalance(val);
+                setBalanceInput("");
+              }}
+              className="shrink-0 rounded-lg bg-purple-500 px-5 py-2 font-bold text-white transition hover:bg-purple-600"
+            >
+              Oppdater
+            </button>
+          </div>
+        </section>
+
+        {/* ── Sparemål ── */}
+        <section className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-4 md:mt-0 md:p-5">
+          <h2 className="mb-3 text-center text-sm font-bold uppercase tracking-wider text-teal-600 md:text-base">
+            Sparer til 🎯
+          </h2>
+
+          <div className="space-y-3">
+            {goals.map((goal, i) => {
+              const pct = goal.price > 0 ? Math.min(100, (balance / goal.price) * 100) : 0;
+              const weeks = goal.price > 0 ? weeksNeeded(goal.price) : 0;
+              const reached = goal.price > 0 && balance >= goal.price;
+              return (
+                <div key={i} className="rounded-xl bg-white/80 p-3">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-wider text-teal-500">
+                    {i + 1}. prioritet
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Hva spares det til?"
+                      value={goal.name}
+                      onChange={(e) => updateGoal(i, "name", e.target.value)}
+                      className="w-full rounded-lg border border-teal-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                    />
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">kr</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step={10}
+                        placeholder="Pris"
+                        value={goal.price || ""}
+                        onChange={(e) => updateGoal(i, "price", e.target.value)}
+                        className="w-24 rounded-lg border border-teal-200 py-2 pl-7 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      />
+                    </div>
+                  </div>
+
+                  {goal.name && goal.price > 0 && (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between text-xs text-teal-700">
+                        <span>kr {Math.min(balance, goal.price)},– / {goal.price},–</span>
+                        <span className="font-bold">{Math.round(pct)}%</span>
+                      </div>
+                      <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-teal-200">
+                        <div
+                          className={`h-full rounded-full transition-all ${reached ? "bg-green-400" : "bg-teal-500"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-center text-xs text-teal-600">
+                        {reached ? (
+                          <span className="font-bold text-green-600">🎉 Nok spart!</span>
+                        ) : (
+                          <>~{weeks} {weeks === 1 ? "uke" : "uker"} med ukelønn igjen</>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
 
       {/* ── Sync info ── */}
       <p className="mt-8 px-4 text-center text-xs text-gray-400">
