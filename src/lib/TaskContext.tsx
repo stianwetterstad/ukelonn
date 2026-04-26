@@ -62,6 +62,7 @@ type TaskStore = {
   balance: number;
   savingsGoal: string;
   childPinConfigured: boolean;
+  settingsLoaded: boolean;
 
   // Derived
   weeklyTasks: Task[];
@@ -111,6 +112,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [balance, setBalanceLocal] = useState(0);
   const [savingsGoal, setSavingsGoalLocal] = useState("");
   const [childPinHash, setChildPinHash] = useState<string | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // ── Firestore realtime listeners ──
   // Firestore brukes som source of truth og gir realtime sync:
@@ -154,6 +156,10 @@ export function TaskProvider({ children }: { children: ReactNode }) {
           setSavingsGoalLocal("");
           setChildPinHash(null);
         }
+        setSettingsLoaded(true);
+      },
+      () => {
+        setSettingsLoaded(true);
       },
     );
 
@@ -348,6 +354,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       balance,
       savingsGoal,
       childPinConfigured: childPinHash !== null,
+      settingsLoaded,
       weeklyTasks,
       bonusTasks,
       dayGroups,
@@ -375,7 +382,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       seedInitialTasks,
       resetAllData,
     };
-  }, [tasks, baseAllowance, balance, savingsGoal, childPinHash, childToggle, setApproval, approveAllPending, setBaseAllowance, setBalance, setSavingsGoal, setChildPin, clearChildPin, verifyChildPin, addTask, editTask, deleteTask, upsertStandardTask, removeStandardTask, seedInitialTasks, resetAllData]);
+  }, [tasks, baseAllowance, balance, savingsGoal, settingsLoaded, childPinHash, childToggle, setApproval, approveAllPending, setBaseAllowance, setBalance, setSavingsGoal, setChildPin, clearChildPin, verifyChildPin, addTask, editTask, deleteTask, upsertStandardTask, removeStandardTask, seedInitialTasks, resetAllData]);
 
   return <TaskContext.Provider value={store}>{children}</TaskContext.Provider>;
 }
