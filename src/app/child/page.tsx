@@ -174,10 +174,10 @@ export default function ChildPage() {
   return (
     <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 md:px-8 md:py-8">
       {/* ─── Top banner ─── */}
-      <header className="rounded-t-2xl bg-pink-400 px-6 py-4 text-center md:py-5">
+      <header className="relative rounded-t-2xl bg-pink-400 px-6 py-4 text-center md:py-5">
         <a
           href="https://alma.rocks"
-          className="absolute left-4 top-4 text-xs text-pink-200 underline-offset-2 hover:text-white md:text-sm"
+          className="absolute left-3 top-3 flex items-center gap-0.5 rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/30"
         >
           ← Alma
         </a>

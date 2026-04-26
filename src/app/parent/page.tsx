@@ -300,7 +300,7 @@ export default function ParentPage() {
       <header className="relative bg-pink-400 px-4 py-3 text-center">
         <a
           href="https://alma.rocks"
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-pink-200 underline-offset-2 hover:text-white"
+          className="absolute left-3 top-3 flex items-center gap-0.5 rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold text-white hover:bg-white/30"
         >
           ← Alma
         </a>
