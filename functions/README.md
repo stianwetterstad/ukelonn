@@ -1,6 +1,6 @@
 # Firebase Cloud Functions for Ukelonn
 
-Cloud Functions som håndterer push notifications til parent.
+Cloud Functions som håndterer push notifications til parent og child.
 
 ## Funksjoner
 
@@ -8,15 +8,39 @@ Cloud Functions som håndterer push notifications til parent.
 - **Trigger**: Firestore dokument endring i `families/{familyId}/tasks/{taskId}`
 - **Handling**: Når en oppgave markeres som "pending" for godkjenning
 - **Action**: Sender push notification til alle parent-devices
-  - Tittel: "Oppgaver venter på godkjenning"
-  - Body: "Åpne appen for å godkjenne."
+  - Tittel: "Ny oppgave til godkjenning"
+  - Body: "{oppgavenavn} er klar for godkjenning."
 
-### 2. `weeklyReminderSunday`
+### 2. `onTaskReviewedByParent`
+- **Trigger**: Firestore dokument endring i `families/{familyId}/tasks/{taskId}`
+- **Handling**: Når approvalStatus endres til "approved" eller "rejected"
+- **Action**: Sender push notification til child-devices
+  - Tittel: "Oppgave godkjent ✅" eller "Oppgave trenger nytt forsok 🔁"
+  - Body: "{oppgavenavn} ble godkjent." / "{oppgavenavn} ble ikke godkjent ennå."
+
+### 3. `onWeeklyAllowanceUnlocked`
+- **Trigger**: Firestore dokument endring i `families/{familyId}/tasks/{taskId}`
+- **Handling**: Når alle weekly-oppgaver blir godkjent
+- **Action**: Sender push notification til child-devices
+  - Tittel: "Ukelonn opptjent 🎉"
+  - Body: "Alle {antall} ukesoppgaver er godkjent. Bra jobbet!"
+
+### 4. `weeklyReminderSunday`
 - **Trigger**: Pubsub scheduled function
 - **Schedule**: Søndag morgen kl. 08:00 (Oslo tid)
 - **Action**: Sender push notification til alle parent-devices
   - Tittel: "Ny uke – gå gjennom oppgaver og nullstill"
   - Body: "Planlegg uka med barnet ditt."
+
+### 5. `childDailyWeekdayReminder`
+- **Trigger**: Pubsub scheduled function
+- **Schedule**: Hverdager kl. 16:00 (Oslo tid)
+- **Action**: Sender påminnelse til child-devices når dagens weekly-oppgaver gjenstår
+
+### 6. `parentEveningPendingSummary`
+- **Trigger**: Pubsub scheduled function
+- **Schedule**: Hverdager kl. 19:00 (Oslo tid)
+- **Action**: Sender kveldssammendrag til parent-devices når oppgaver venter godkjenning
 
 ## Deployment
 
@@ -69,6 +93,6 @@ families/
 
 ## Advarsel
 
-- **Kun parent devices får meldinger**: `where("role", "==", "parent")`
+- **Både parent og child devices får meldinger**: `where("role", "==", "parent"|"child")`
 - **Ingen sending hvis ingen devices**: Sjekkes automatisk
 - **Invalid tokens fjernes**: Hvis sending feiler, slettes tokenet fra Firestore

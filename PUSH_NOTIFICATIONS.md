@@ -2,7 +2,7 @@
 
 ## Overview
 
-Push notifications for parent devices er implementert med Firebase Cloud Messaging (FCM) og Cloud Functions.
+Push notifications for parent og child devices er implementert med Firebase Cloud Messaging (FCM) og Cloud Functions.
 
 ## Arkitektur
 
@@ -18,7 +18,17 @@ Backend (Firebase Cloud Functions)
   ├─ onTaskPendingApproval (Firestore trigger)
   │   ↓
   │   └─ Queries: role="parent" devices
-  │   └─ Sends: "Oppgaver venter på godkjenning"
+  │   └─ Sends: "Ny oppgave til godkjenning"
+  │
+  ├─ onTaskReviewedByParent (Firestore trigger)
+  │   ↓
+  │   └─ Queries: role="child" devices
+  │   └─ Sends: approved/rejected status for task
+  │
+  ├─ onWeeklyAllowanceUnlocked (Firestore trigger)
+  │   ↓
+  │   └─ Queries: role="child" devices
+  │   └─ Sends: "Ukelonn opptjent"
   │
   └─ weeklyReminderSunday (Scheduled - Sundays 08:00)
       ↓
@@ -72,18 +82,45 @@ families/family-default/devices/{token}
 - **Trigger**: Firestore write to `families/{familyId}/tasks/{taskId}`
 - **Logic**:
   - Detects when `approvalStatus` changes from non-"pending" to "pending"
+  - Includes task title in notification body
   - Queries all devices where `role="parent"`
   - Sends multicast message to all tokens
   - Auto-removes invalid tokens on failure
 
-#### Function 2: `weeklyReminderSunday`
+#### Function 2: `onTaskReviewedByParent`
+- **Trigger**: Firestore write to `families/{familyId}/tasks/{taskId}`
+- **Logic**:
+  - Detects when `approvalStatus` changes to `approved` or `rejected`
+  - Queries all devices where `role="child"`
+  - Sends outcome-specific notification to child devices
+
+#### Function 3: `onWeeklyAllowanceUnlocked`
+- **Trigger**: Firestore write to `families/{familyId}/tasks/{taskId}`
+- **Logic**:
+  - Re-checks all weekly tasks whenever a task changes
+  - Detects transition from "not all approved" to "all approved"
+  - Sends "Ukelonn opptjent" to child devices
+
+#### Function 4: `weeklyReminderSunday`
 - **Trigger**: Pubsub scheduled (Sundays 08:00 Europe/Oslo)
 - **Logic**:
   - Gets all parent devices
   - Sends reminder message to all tokens
 
-**Helper**: `sendPushToParents(title, body)`
-- Queries parent devices
+#### Function 5: `childDailyWeekdayReminder`
+- **Trigger**: Pubsub scheduled (weekdays 16:00 Europe/Oslo)
+- **Logic**:
+  - Checks today's weekly tasks
+  - Sends reminder to child when tasks are still remaining
+
+#### Function 6: `parentEveningPendingSummary`
+- **Trigger**: Pubsub scheduled (weekdays 19:00 Europe/Oslo)
+- **Logic**:
+  - Counts pending approval tasks
+  - Sends summary to parent with count and short task preview
+
+**Helper**: `sendPushToRole(role, title, body)`
+- Queries parent or child devices
 - Uses Admin SDK for multicast messaging
 - Handles token cleanup on failure
 
