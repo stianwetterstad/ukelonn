@@ -1,0 +1,30 @@
+{
+  "name": "Alma Ukelonn Parent",
+  "short_name": "Ukelonn Parent",
+  "description": "Installable parent view for Alma's allowance tracker.",
+  "start_url": "/ukelonn/parent/",
+  "scope": "/ukelonn/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/ukelonn/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ukelonn/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ukelonn/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

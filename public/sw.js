@@ -2,6 +2,8 @@ const CACHE_NAME = "ukelonn-v1";
 const APP_SHELL = [
   "./",
   "./manifest.webmanifest",
+  "./manifest-child.webmanifest",
+  "./manifest-parent.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable.svg",
