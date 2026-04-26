@@ -155,6 +155,18 @@ function changedToStatus(
   return before?.approvalStatus !== targetStatus && after?.approvalStatus === targetStatus;
 }
 
+function isWeeklyTaskApproved(task: TaskDocument | undefined): boolean {
+  if (!task) {
+    return false;
+  }
+
+  return (
+    task.type === "weekly" &&
+    task.checkedByChild === true &&
+    task.approvalStatus === "approved"
+  );
+}
+
 // ─── Firestore trigger: When task status changes to "pending" ──────────────
 export const onTaskPendingApproval = onDocumentWritten(
   {
@@ -226,6 +238,75 @@ export const onTaskReviewedByParent = onDocumentWritten(
         `${taskLabel} ble ikke godkjent ennå.`
       );
     }
+  }
+);
+
+// ─── Firestore trigger: Notify child when all weekly tasks are approved ───
+export const onWeeklyAllowanceUnlocked = onDocumentWritten(
+  {
+    region: FUNCTION_REGION,
+    document: "families/{familyId}/tasks/{taskId}",
+  },
+  async (event) => {
+    const { familyId, taskId } = event.params;
+
+    if (familyId !== FAMILY_ID) {
+      return;
+    }
+
+    const before = event.data?.before.data() as TaskDocument | undefined;
+    const after = event.data?.after.data() as TaskDocument | undefined;
+
+    // No meaningful transition for weekly approval state.
+    if (!before && !after) {
+      return;
+    }
+
+    const weeklyTasksSnap = await db
+      .collection("families")
+      .doc(familyId)
+      .collection("tasks")
+      .where("type", "==", "weekly")
+      .get();
+
+    if (weeklyTasksSnap.empty) {
+      return;
+    }
+
+    let beforeAllApproved = true;
+    let afterAllApproved = true;
+
+    for (const taskDoc of weeklyTasksSnap.docs) {
+      const currentTask = taskDoc.data() as TaskDocument;
+
+      const beforeTask = taskDoc.id === taskId ? before : currentTask;
+      const afterTask = taskDoc.id === taskId ? after : currentTask;
+
+      if (!isWeeklyTaskApproved(beforeTask)) {
+        beforeAllApproved = false;
+      }
+
+      if (!isWeeklyTaskApproved(afterTask)) {
+        afterAllApproved = false;
+      }
+
+      if (!beforeAllApproved && !afterAllApproved) {
+        break;
+      }
+    }
+
+    if (beforeAllApproved || !afterAllApproved) {
+      return;
+    }
+
+    const totalWeeklyTasks = weeklyTasksSnap.size;
+    console.log(`Weekly allowance unlocked for family ${familyId}`);
+
+    await sendPushToChildren(
+      familyId,
+      "Ukelonn opptjent 🎉",
+      `Alle ${totalWeeklyTasks} ukesoppgaver er godkjent. Bra jobbet!`
+    );
   }
 );
 
@@ -318,6 +399,53 @@ export const childDailyWeekdayReminder = onSchedule(
         familyId,
         "Husk dagens oppgaver ✅",
         "Åpne appen og kryss av når du er ferdig."
+      );
+    }
+  }
+);
+
+// ─── Scheduled trigger: Parent evening summary for pending approvals ───────
+export const parentEveningPendingSummary = onSchedule(
+  {
+    region: FUNCTION_REGION,
+    schedule: "0 19 * * 1-5", // Weekdays at 19:00
+    timeZone: OSLO_TIME_ZONE,
+  },
+  async () => {
+    console.log("Parent evening pending summary triggered at", new Date().toISOString());
+
+    const familiesSnap = await db.collection("families").get();
+    for (const familyDoc of familiesSnap.docs) {
+      const familyId = familyDoc.id;
+      const pendingSnap = await db
+        .collection("families")
+        .doc(familyId)
+        .collection("tasks")
+        .where("approvalStatus", "==", "pending")
+        .get();
+
+      if (pendingSnap.empty) {
+        continue;
+      }
+
+      const pendingCount = pendingSnap.size;
+      const taskPreview = pendingSnap.docs
+        .map((docSnap) => {
+          const task = docSnap.data() as TaskDocument;
+          return task.title?.trim();
+        })
+        .filter((title): title is string => Boolean(title))
+        .slice(0, 2)
+        .join(", ");
+
+      const body = taskPreview
+        ? `${pendingCount} oppgaver venter: ${taskPreview}${pendingCount > 2 ? " ..." : ""}`
+        : `${pendingCount} oppgaver venter pa godkjenning.`;
+
+      await sendPushToParents(
+        familyId,
+        "Kveldssammendrag: godkjenning",
+        body
       );
     }
   }
