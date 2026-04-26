@@ -318,12 +318,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
     await setDoc(
       settingsDocRef(),
-      {
-        baseAllowance: INITIAL_BASE_ALLOWANCE,
-        balance: 0,
-        savingsGoal: "",
-        childPinHash: deleteField(),
-      },
+      { baseAllowance: INITIAL_BASE_ALLOWANCE },
       { merge: true },
     );
   }, []);
