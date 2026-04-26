@@ -22,6 +22,12 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Almas ukelønn",
   },
+  // apple-mobile-web-app-capable must be set explicitly — Next.js 16 does not
+  // generate it from appleWebApp.capable. Without this tag iOS may not launch
+  // the app in true standalone mode, which blocks web-push on iPhone/iPad.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
