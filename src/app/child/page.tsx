@@ -1,8 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getBasePath } from "@/lib/basePath";
-import { getMessagingServiceWorkerPath, initializeFCM } from "@/lib/fcm";
 import { useTaskStore } from "@/lib/TaskContext";
 
 type SavingsGoalItem = { name: string; price: number };
@@ -51,9 +49,6 @@ export default function ChildPage() {
   } = useTaskStore();
 
   const [balanceInput, setBalanceInput] = useState("");
-  const [fcmStatus, setFcmStatus] = useState<"idle" | "testing" | "granted" | "denied" | "error">("idle");
-  const [fcmToken, setFcmToken] = useState<string | null>(null);
-  const [fcmMessage, setFcmMessage] = useState<string | null>(null);
   const goals = useMemo(() => parseSavingsGoal(savingsGoal), [savingsGoal]);
 
   const doneCount = dayGroups
@@ -83,67 +78,6 @@ export default function ChildPage() {
     return Math.ceil(remaining / baseAllowance);
   }
 
-  // DEBUG ONLY: manual notification test triggered by user click
-  async function testNotifications() {
-    setFcmStatus("testing");
-    setFcmToken(null);
-    setFcmMessage(null);
-
-    const hasNotificationApi = typeof window !== "undefined" && "Notification" in window;
-    console.log("[TEST FCM] Notification API available:", hasNotificationApi);
-
-    if (!hasNotificationApi) {
-      console.warn("[TEST FCM] Notification API is not supported in this browser.");
-      setFcmStatus("error");
-      return;
-    }
-
-    console.log("[TEST FCM] Current permission state:", Notification.permission);
-    const basePath = getBasePath();
-    const swPath = getMessagingServiceWorkerPath();
-    console.log("[TEST FCM] basePath:", basePath || "<root>");
-    console.log("[TEST FCM] swPath:", swPath);
-
-    try {
-      const response = await fetch(swPath, { cache: "no-store" });
-      console.log("[TEST FCM] fetch(swPath).status:", response.status);
-
-      if (response.status !== 200) {
-        const message = `Service worker not found at ${swPath}`;
-        console.error("[TEST FCM]", message);
-        setFcmMessage(message);
-        setFcmStatus("error");
-        return;
-      }
-    } catch (error) {
-      const message = `Service worker not found at ${swPath}`;
-      console.error("[TEST FCM] Failed to fetch service worker:", error);
-      setFcmMessage(message);
-      setFcmStatus("error");
-      return;
-    }
-    
-    // Request permission via initializeFCM (which now handles SW registration)
-    try {
-      const token = await initializeFCM("child");
-      
-      if (token) {
-        console.log("[TEST FCM] ✅ FCM token received:", token.substring(0, 20) + "...");
-        setFcmToken(token);
-        setFcmMessage(`Service worker OK at ${swPath}`);
-        setFcmStatus("granted");
-      } else {
-        console.warn("[TEST FCM] ⚠️  initializeFCM returned null (permission may have been denied)");
-        setFcmMessage(Notification.permission === "granted" ? `No FCM token returned for ${swPath}` : null);
-        setFcmStatus(Notification.permission === "granted" ? "error" : "denied");
-      }
-    } catch (error) {
-      console.error("[TEST FCM] ❌ FCM initialization error:", error);
-      setFcmMessage(`FCM initialization failed for ${swPath}`);
-      setFcmStatus("error");
-    }
-  }
-
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 md:px-8 md:py-8">
       {/* ─── Top banner ─── */}
@@ -155,45 +89,6 @@ export default function ChildPage() {
           Gjør alle oppgavene → <span className="font-bold text-white">kr {baseAllowance},–</span> + opptil <span className="font-bold text-white">kr {maxBonus},–</span> i bonus!
         </p>
       </header>
-
-      {/* DEBUG ONLY: remove after notification debugging */}
-      <div className="bg-pink-50 px-4 pt-3 pb-2 md:px-6">
-        <button
-          type="button"
-          onClick={() => void testNotifications()}
-          disabled={fcmStatus === "testing"}
-          className="rounded-lg border border-dashed border-pink-300 bg-white px-3 py-2 text-sm font-bold text-pink-700 hover:bg-pink-100 disabled:opacity-50"
-        >
-          {fcmStatus === "testing" ? "Tester..." : "Test varsler"}
-        </button>
-        
-        {/* Status display */}
-        {fcmStatus !== "idle" && (
-          <div className="mt-2 rounded bg-white px-3 py-2 text-xs">
-            {fcmStatus === "testing" && <span className="text-blue-600">⏳ Tester...</span>}
-            {fcmStatus === "granted" && (
-              <div>
-                <span className="text-green-600">✅ Varsler aktivert</span>
-                {fcmMessage && <div className="mt-1 text-gray-600">{fcmMessage}</div>}
-                {fcmToken && (
-                  <div className="mt-1 break-all font-mono text-gray-600">
-                    Token: {fcmToken.substring(0, 30)}...
-                  </div>
-                )}
-              </div>
-            )}
-            {fcmStatus === "denied" && (
-              <span className="text-orange-600">⛔ Varsler avvist</span>
-            )}
-            {fcmStatus === "error" && (
-              <div className="text-red-600">
-                <div>❌ Feil ved aktivering</div>
-                {fcmMessage && <div className="mt-1 break-all">{fcmMessage}</div>}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* ─── Dashboard ─── */}
       <div className="overflow-hidden rounded-b-2xl shadow-lg">
