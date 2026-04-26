@@ -29,6 +29,8 @@ type TaskDocument = {
   seeded?: boolean;
 };
 
+type ApprovalStatus = NonNullable<TaskDocument["approvalStatus"]>;
+
 const INVALID_TOKEN_ERROR_CODES = new Set<string>([
   "messaging/invalid-registration-token",
   "messaging/registration-token-not-registered",
@@ -137,6 +139,22 @@ async function sendPushToChildren(familyId: string, title: string, body: string)
   await sendPushToRole(familyId, "child", title, body);
 }
 
+function getTaskLabel(task: TaskDocument | undefined, fallback = "En oppgave"): string {
+  const title = task?.title?.trim();
+  if (title) {
+    return title;
+  }
+  return fallback;
+}
+
+function changedToStatus(
+  before: TaskDocument | undefined,
+  after: TaskDocument | undefined,
+  targetStatus: ApprovalStatus
+): boolean {
+  return before?.approvalStatus !== targetStatus && after?.approvalStatus === targetStatus;
+}
+
 // ─── Firestore trigger: When task status changes to "pending" ──────────────
 export const onTaskPendingApproval = onDocumentWritten(
   {
@@ -154,17 +172,58 @@ export const onTaskPendingApproval = onDocumentWritten(
     const before = event.data?.before.data();
     const after = event.data?.after.data();
 
-    // Check if approvalStatus changed to "pending"
-    if (
-      before?.approvalStatus !== "pending" &&
-      after?.approvalStatus === "pending"
-    ) {
+    // Notify parent when child marks a task as pending approval.
+    if (changedToStatus(before, after, "pending")) {
+      const taskLabel = getTaskLabel(after, "En oppgave");
       console.log("Task marked as pending approval:", event.params.taskId);
 
       await sendPushToParents(
         familyId,
-        "Oppgaver venter på godkjenning",
-        "Åpne appen for å godkjenne."
+        "Ny oppgave til godkjenning",
+        `${taskLabel} er klar for godkjenning.`
+      );
+    }
+  }
+);
+
+// ─── Firestore trigger: Notify child when parent approves/rejects ─────────
+export const onTaskReviewedByParent = onDocumentWritten(
+  {
+    region: FUNCTION_REGION,
+    document: "families/{familyId}/tasks/{taskId}",
+  },
+  async (event) => {
+    const { familyId, taskId } = event.params;
+
+    if (familyId !== FAMILY_ID) {
+      return;
+    }
+
+    const before = event.data?.before.data() as TaskDocument | undefined;
+    const after = event.data?.after.data() as TaskDocument | undefined;
+
+    if (!after) {
+      return;
+    }
+
+    const taskLabel = getTaskLabel(after, "Oppgaven");
+
+    if (changedToStatus(before, after, "approved")) {
+      console.log("Task approved by parent:", taskId);
+      await sendPushToChildren(
+        familyId,
+        "Oppgave godkjent ✅",
+        `${taskLabel} ble godkjent.`
+      );
+      return;
+    }
+
+    if (changedToStatus(before, after, "rejected")) {
+      console.log("Task rejected by parent:", taskId);
+      await sendPushToChildren(
+        familyId,
+        "Oppgave trenger nytt forsok 🔁",
+        `${taskLabel} ble ikke godkjent ennå.`
       );
     }
   }
