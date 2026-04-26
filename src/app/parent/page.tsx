@@ -5,7 +5,7 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } fr
 import { auth } from "@/lib/firebase";
 import { useTaskStore } from "@/lib/TaskContext";
 import type { ApprovalStatus } from "@/lib/tasks";
-import { NotificationTestCard } from "@/app/NotificationTestCard";
+import { ActivateNotificationsButton } from "@/app/ActivateNotificationsButton";
 
 // ─── Modal type ─────────────────────────────────────────────────────────────
 type ModalState =
@@ -316,10 +316,6 @@ export default function ParentPage() {
           Logg ut
         </button>
       </header>
-
-      <div className="px-4 pt-4">
-        <NotificationTestCard role="parent" />
-      </div>
 
       {/* ── Admin panel ── */}
       <div className="px-4 py-3">
@@ -694,6 +690,8 @@ export default function ParentPage() {
           </div>
         </div>
       )}
+
+      <ActivateNotificationsButton role="parent" />
 
       <style>{`
         @keyframes slideUp {

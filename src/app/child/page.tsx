@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTaskStore } from "@/lib/TaskContext";
-import { NotificationTestCard } from "@/app/NotificationTestCard";
+import { ActivateNotificationsButton } from "@/app/ActivateNotificationsButton";
 
 type SavingsGoalItem = { name: string; price: number };
 
@@ -189,10 +189,6 @@ export default function ChildPage() {
           Gjør alle oppgavene → <span className="font-bold text-white">kr {baseAllowance},–</span> + opptil <span className="font-bold text-white">kr {maxBonus},–</span> i bonus!
         </p>
       </header>
-
-      <div className="mt-4">
-        <NotificationTestCard role="child" />
-      </div>
 
       {/* ─── Dashboard ─── */}
       <div className="overflow-hidden rounded-b-2xl shadow-lg">
@@ -501,6 +497,8 @@ export default function ChildPage() {
 
         </div>{/* end saldo + sparemål row */}
       </div>{/* end dashboard */}
+
+      <ActivateNotificationsButton role="child" />
     </main>
   );
 }
