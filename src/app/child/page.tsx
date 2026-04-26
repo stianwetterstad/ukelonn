@@ -48,6 +48,7 @@ export default function ChildPage() {
     setBalance,
     setSavingsGoal,
     childPinConfigured,
+    settingsLoaded,
     verifyChildPin,
   } = useTaskStore();
 
@@ -82,6 +83,18 @@ export default function ChildPage() {
   const hasPersistedUnlock =
     typeof window !== "undefined" &&
     window.sessionStorage.getItem("ukelonn-child-pin-unlocked") === "yes";
+
+  // Wait for Firestore settings to load before deciding whether to show the PIN screen.
+  // Without this guard, childPinConfigured starts as false (initial state) and the page
+  // would be briefly accessible before the PIN hash is fetched from Firestore.
+  if (!settingsLoaded) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-pink-50">
+        <span className="text-pink-400 text-sm">Laster…</span>
+      </main>
+    );
+  }
+
   const isChildUnlocked = !childPinConfigured || unlockedThisSession || hasPersistedUnlock;
 
   async function handleUnlockSubmit(e: React.FormEvent) {
