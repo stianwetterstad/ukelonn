@@ -95,7 +95,7 @@ export default function ChildPage() {
     );
   }
 
-  const isChildUnlocked = !childPinConfigured || unlockedThisSession || hasPersistedUnlock;
+  const isChildUnlocked = childPinConfigured && (unlockedThisSession || hasPersistedUnlock);
 
   async function handleUnlockSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -135,6 +135,19 @@ export default function ChildPage() {
   function weeksNeeded(price: number) {
     const remaining = Math.max(0, price - balance);
     return Math.ceil(remaining / baseAllowance);
+  }
+
+  if (!childPinConfigured) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-pink-50 px-4">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg text-center">
+          <h1 className="text-xl font-bold text-pink-700">Pinkode mangler</h1>
+          <p className="mt-3 text-sm text-gray-600">
+            Be mamma eller pappa sette en ny pinkode.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   if (!isChildUnlocked) {
