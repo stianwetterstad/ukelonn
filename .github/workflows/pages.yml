@@ -15,6 +15,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_ENABLE_FCM: "true"
+      NEXT_PUBLIC_FCM_VAPID_KEY: "BBwVBbB-N_Yg5tv17QggOE41POmada4V3-QnB662gTaMdkhFImU0O_pa3ZHysLq444dY_s2lIRBLTEEOsjDPpw8"
     steps:
       - uses: actions/checkout@v4
 
