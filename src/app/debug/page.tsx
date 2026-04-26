@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { APP_BASE_PATH } from "@/lib/appBasePath";
+import { getPushSupportStatus, type PushSupportStatus } from "@/lib/fcm";
 
 interface DebugInfo {
   https: boolean;
@@ -26,7 +27,9 @@ interface DebugInfo {
   >;
   notificationPermission: NotificationPermission;
   fcmToken: string | null;
+  fcmStatus: string | null;
   basePath: string;
+  pushSupport: PushSupportStatus;
 }
 
 function StatusIcon({ ok }: { ok: boolean }) {
@@ -103,13 +106,18 @@ export default function DebugPage() {
 
       // Get FCM token from sessionStorage or localStorage
       let fcmToken = null;
+      let fcmStatus = null;
       try {
         fcmToken =
           sessionStorage.getItem("fcm_token") ||
           localStorage.getItem("fcm_token");
+        fcmStatus = localStorage.getItem("fcm_status");
       } catch {
         fcmToken = null;
+        fcmStatus = null;
       }
+
+      const pushSupport = getPushSupportStatus();
 
       setInfo({
         https: isSecure,
@@ -122,7 +130,9 @@ export default function DebugPage() {
         iconsAccessible,
         notificationPermission: Notification.permission,
         fcmToken,
+        fcmStatus,
         basePath: APP_BASE_PATH,
+        pushSupport,
       });
       setLoading(false);
     })();
@@ -234,6 +244,32 @@ export default function DebugPage() {
         </div>
       </section>
 
+      <section className="mb-6 bg-white p-4 rounded border">
+        <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
+          <StatusIcon ok={!info.pushSupport.requiresStandaloneInstall} />
+          iPhone & iPad Push Status
+        </h2>
+        <div className="space-y-2 text-sm">
+          <div>
+            <span className="font-mono bg-gray-100 px-2 py-1 rounded">isIOS</span>: {info.pushSupport.isIOS ? "yes" : "no"}
+          </div>
+          <div>
+            <span className="font-mono bg-gray-100 px-2 py-1 rounded">standalone</span>: {info.pushSupport.isStandalone ? "yes" : "no"}
+          </div>
+          <div>
+            <span className="font-mono bg-gray-100 px-2 py-1 rounded">canAttemptPush</span>: {info.pushSupport.canAttemptPush ? "yes" : "no"}
+          </div>
+          <div>
+            <span className="font-mono bg-gray-100 px-2 py-1 rounded">reason</span>: {info.pushSupport.reason ?? "ready"}
+          </div>
+          {info.pushSupport.isIOS && !info.pushSupport.isStandalone ? (
+            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+              På iOS virker web-push bare når appen er installert til Hjem-skjermen og åpnet derfra. Test ikke fra vanlig Safari- eller Chrome-fane.
+            </div>
+          ) : null}
+        </div>
+      </section>
+
       {/* Notifications & FCM */}
       <section className="mb-6 bg-white p-4 rounded border">
         <h2 className="text-xl font-semibold mb-3 flex items-center gap-2">
@@ -260,6 +296,15 @@ export default function DebugPage() {
                 Request Permission
               </button>
             )}
+          </div>
+
+          <div className="border-t pt-3">
+            <div className="font-mono text-xs bg-gray-100 px-2 py-1 rounded mb-1">
+              FCM Status
+            </div>
+            <div className="font-mono text-xs break-all bg-gray-50 p-2 rounded">
+              {info.fcmStatus ?? "No persisted status yet"}
+            </div>
           </div>
 
           <div className="border-t pt-3">

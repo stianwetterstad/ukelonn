@@ -183,11 +183,21 @@ Expected output after deployment:
 
 Run these steps on production:
 
-1. Open [https://stian.github.io/ukelonn/debug](https://stian.github.io/ukelonn/debug)
-2. Accept notifications when prompted
-3. Copy the FCM token from the debug page (or browser console)
-4. Send a test message in Firebase Console (Cloud Messaging)
-5. Test both foreground and background delivery
+1. Open [https://stianwetterstad.github.io/ukelonn/prod-test/](https://stianwetterstad.github.io/ukelonn/prod-test/)
+2. Open the debug link from that page and verify iOS/PWA status
+3. Accept notifications when prompted
+4. Trigger a local parent/child test notification from the prod test page
+5. Copy the FCM token from the debug page (or browser console)
+6. Send a test message in Firebase Console (Cloud Messaging)
+7. Test both foreground and background delivery
+
+### iPhone and iPad
+
+- Web-push pa iOS virker bare for en installert Home Screen-app on iOS/iPadOS 16.4+.
+- Testing from vanlig Safari- eller Chrome-fane pa iPhone/iPad vil ikke gi samme resultat som pa desktop.
+- Use `/prod-test` as the main production entry point for notification verification on real devices.
+- Use `/child` and `/parent` after unlock/login to trigger the built-in local test notification on the device.
+- Use `/debug` on the device to confirm `standalone: yes` before expecting FCM token registration.
 
 ### Testing New Deployments
 

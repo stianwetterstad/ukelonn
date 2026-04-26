@@ -7,8 +7,22 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getApps } from "firebase/app";
 
 const FAMILY_ID = "family-default";
+const LAST_FCM_TOKEN_KEY = "fcm_token";
+const LAST_FCM_STATUS_KEY = "fcm_status";
 
 type DeviceRole = "parent" | "child";
+
+export type PushSupportStatus = {
+  isIOS: boolean;
+  isStandalone: boolean;
+  requiresStandaloneInstall: boolean;
+  isSecureOrigin: boolean;
+  hasNotificationApi: boolean;
+  hasServiceWorker: boolean;
+  notificationPermission: NotificationPermission | "unsupported";
+  canAttemptPush: boolean;
+  reason: string | null;
+};
 
 function isSecureMessagingOrigin(): boolean {
   if (typeof window === "undefined") {
@@ -17,6 +31,103 @@ function isSecureMessagingOrigin(): boolean {
 
   const { protocol, hostname } = window.location;
   return protocol === "https:" || hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function isIOSDevice(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const platform = window.navigator.platform;
+  const userAgent = window.navigator.userAgent;
+  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
+
+  return /iPad|iPhone|iPod/.test(userAgent) || (platform === "MacIntel" && maxTouchPoints > 1);
+}
+
+function isStandaloneDisplayMode(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia("(display-mode: standalone)").matches || standaloneNavigator.standalone === true;
+}
+
+function persistLastFcmStatus(status: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(LAST_FCM_STATUS_KEY, status);
+  } catch {
+    console.debug("[FCM] Unable to persist FCM status");
+  }
+}
+
+function persistLastFcmToken(token: string | null): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (token) {
+      window.localStorage.setItem(LAST_FCM_TOKEN_KEY, token);
+      return;
+    }
+
+    window.localStorage.removeItem(LAST_FCM_TOKEN_KEY);
+  } catch {
+    console.debug("[FCM] Unable to persist FCM token");
+  }
+}
+
+export function getPushSupportStatus(): PushSupportStatus {
+  if (typeof window === "undefined") {
+    return {
+      isIOS: false,
+      isStandalone: false,
+      requiresStandaloneInstall: false,
+      isSecureOrigin: false,
+      hasNotificationApi: false,
+      hasServiceWorker: false,
+      notificationPermission: "unsupported",
+      canAttemptPush: false,
+      reason: "Push can only be initialized in the browser",
+    };
+  }
+
+  const isIOS = isIOSDevice();
+  const isStandalone = isStandaloneDisplayMode();
+  const isSecureOrigin = isSecureMessagingOrigin();
+  const hasNotificationApi = "Notification" in window;
+  const hasServiceWorker = "serviceWorker" in navigator;
+  const notificationPermission = hasNotificationApi ? Notification.permission : "unsupported";
+  const requiresStandaloneInstall = isIOS && !isStandalone;
+
+  let reason: string | null = null;
+  if (!isSecureOrigin) {
+    reason = "Push krever HTTPS eller localhost";
+  } else if (requiresStandaloneInstall) {
+    reason = "Pa iPhone/iPad virker web-push bare i en installert Home Screen-app";
+  } else if (!hasNotificationApi) {
+    reason = "Notification API er ikke tilgjengelig i denne nettleseren";
+  } else if (!hasServiceWorker) {
+    reason = "Service workers er ikke tilgjengelige i denne nettleseren";
+  }
+
+  return {
+    isIOS,
+    isStandalone,
+    requiresStandaloneInstall,
+    isSecureOrigin,
+    hasNotificationApi,
+    hasServiceWorker,
+    notificationPermission,
+    canAttemptPush: reason === null,
+    reason,
+  };
 }
 
 
@@ -91,11 +202,18 @@ async function waitForActiveServiceWorker(registration: ServiceWorkerRegistratio
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    persistLastFcmStatus("notification-api-unavailable");
+    return false;
+  }
+
   try {
     const permission = await Notification.requestPermission();
+    persistLastFcmStatus(permission === "granted" ? "permission-granted" : `permission-${permission}`);
     return permission === "granted";
   } catch (error) {
     console.error("Failed to request notification permission:", error);
+    persistLastFcmStatus("permission-error");
     return false;
   }
 }
@@ -106,11 +224,23 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
 
   if (!enableFCM) {
     console.info("[FCM] Skipping initialization: NEXT_PUBLIC_ENABLE_FCM is not true");
+    persistLastFcmStatus("disabled-by-env");
     return null;
   }
 
-  if (!isSecureMessagingOrigin()) {
+  const pushSupport = getPushSupportStatus();
+
+  if (!pushSupport.isSecureOrigin) {
     console.info("[FCM] Skipping initialization: insecure context (requires HTTPS or localhost)");
+    persistLastFcmStatus("insecure-origin");
+    persistLastFcmToken(null);
+    return null;
+  }
+
+  if (pushSupport.requiresStandaloneInstall) {
+    console.info("[FCM] Skipping initialization on iOS: app must be launched from Home Screen for push support");
+    persistLastFcmStatus("ios-requires-home-screen-install");
+    persistLastFcmToken(null);
     return null;
   }
 
@@ -120,6 +250,8 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
   }
   if (!fcmVapidKey) {
     console.warn("[FCM] Skipping initialization: NEXT_PUBLIC_FCM_VAPID_KEY is missing");
+    persistLastFcmStatus("missing-vapid-key");
+    persistLastFcmToken(null);
     return null;
   }
 
@@ -134,6 +266,8 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
 
   if (!messagingSupported) {
     console.info("[FCM] Skipping initialization: Firebase Messaging is not supported in this browser");
+    persistLastFcmStatus("messaging-unsupported");
+    persistLastFcmToken(null);
     return null;
   }
 
@@ -141,6 +275,8 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
     const messaging = await getMessagingInstance();
     if (!messaging) {
       console.warn("FCM not supported in this browser");
+      persistLastFcmStatus("messaging-instance-unavailable");
+      persistLastFcmToken(null);
       return null;
     }
 
@@ -151,6 +287,7 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
     const permissionGranted = await requestNotificationPermission();
     if (!permissionGranted) {
       console.warn("[FCM] Notification permission denied");
+      persistLastFcmToken(null);
       return null;
     }
     if (debugFirebase) {
@@ -160,6 +297,8 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
     // Register service worker explicitly
     if (!("serviceWorker" in navigator)) {
       console.error("[FCM] Service workers are not supported in this browser");
+      persistLastFcmStatus("service-worker-unavailable");
+      persistLastFcmToken(null);
       return null;
     }
 
@@ -199,6 +338,8 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
       console.log("[FCM] Service worker registered successfully:", reg);
     } catch (swError) {
       console.error("[FCM] Failed to register service worker at", swUrl, swError);
+      persistLastFcmStatus("service-worker-registration-failed");
+      persistLastFcmToken(null);
       return null;
     }
 
@@ -229,15 +370,21 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
         stack: error?.stack,
         hint: "Check firebaseConfig match (projectId/appId/senderId) between app and SW, verify VAPID key, and confirm swUrl/scope under /ukelonn.",
       });
+      persistLastFcmStatus("get-token-failed");
+      persistLastFcmToken(null);
       return null;
     }
 
     if (!token) {
       console.warn("[FCM] Failed to get FCM token - returned null for", swUrl);
+      persistLastFcmStatus("empty-token");
+      persistLastFcmToken(null);
       return null;
     }
 
     console.log("[FCM] FCM token obtained successfully:", token.substring(0, 20) + "...");
+    persistLastFcmStatus("token-ready");
+    persistLastFcmToken(token);
 
     // Save token to Firestore
     await saveFCMToken(token, role);
@@ -248,8 +395,46 @@ export async function initializeFCM(role: DeviceRole = "parent"): Promise<string
     return token;
   } catch (error) {
     console.error("[FCM] FCM initialization failed:", error);
+    persistLastFcmStatus("initialization-error");
+    persistLastFcmToken(null);
     return null;
   }
+}
+
+export async function emulateRoleNotification(role: DeviceRole): Promise<void> {
+  const pushSupport = getPushSupportStatus();
+
+  if (!pushSupport.hasNotificationApi) {
+    throw new Error("Notifications er ikke tilgjengelig i denne nettleseren.");
+  }
+
+  const permissionGranted = await requestNotificationPermission();
+  if (!permissionGranted) {
+    throw new Error("Varseltilgang ble ikke gitt.");
+  }
+
+  const title = role === "parent" ? "Testvarsel til forelder" : "Testvarsel til barn";
+  const body =
+    role === "parent"
+      ? "Dette emulerer godkjenningsvarsel for forelder pa iPhone/iPad."
+      : "Dette emulerer statusvarsel for barn pa iPhone/iPad.";
+  const data = { link: `${APP_BASE_PATH}/${role}/?src=ios-local-test` };
+  const options: NotificationOptions = {
+    body,
+    icon: `${APP_BASE_PATH}/icon-192.png`,
+    badge: `${APP_BASE_PATH}/icon-192.png`,
+    data,
+  };
+
+  if (pushSupport.hasServiceWorker) {
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification(title, options);
+    persistLastFcmStatus(`local-test-${role}`);
+    return;
+  }
+
+  new Notification(title, options);
+  persistLastFcmStatus(`local-test-${role}`);
 }
 
 async function saveFCMToken(token: string, role: DeviceRole): Promise<void> {
