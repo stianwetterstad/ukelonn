@@ -73,6 +73,15 @@ export default function ParentPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const source = new URLSearchParams(window.location.search).get("src");
+    if (!source) {
+      return;
+    }
+
+    console.log("[Notify] Opened parent page from push source:", source);
+  }, []);
+
   // ── Pending queue ──
   const pendingItems = tasks.filter((t) => t.approvalStatus === "pending");
 

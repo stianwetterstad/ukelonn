@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTaskStore } from "@/lib/TaskContext";
 
 type SavingsGoalItem = { name: string; price: number };
@@ -62,6 +62,15 @@ export default function ChildPage() {
 
   // For the child view, show "earned" based on approvals
   const childTotalEarned = totalEarned;
+
+  useEffect(() => {
+    const source = new URLSearchParams(window.location.search).get("src");
+    if (!source) {
+      return;
+    }
+
+    console.log("[Notify] Opened child page from push source:", source);
+  }, []);
 
   function updateGoal(index: number, field: "name" | "price", value: string) {
     const nextGoals = goals.map((g, i) =>

@@ -179,6 +179,14 @@ function changedToStatus(
   return before?.approvalStatus !== targetStatus && after?.approvalStatus === targetStatus;
 }
 
+function withTrackingSource(link: string, source: string): string {
+  const [base, hash] = link.split("#", 2);
+  const separator = base.includes("?") ? "&" : "?";
+  const tracked = `${base}${separator}src=${encodeURIComponent(source)}`;
+
+  return hash ? `${tracked}#${hash}` : tracked;
+}
+
 function isWeeklyTaskApproved(task: TaskDocument | undefined): boolean {
   if (!task) {
     return false;
@@ -217,7 +225,12 @@ export const onTaskPendingApproval = onDocumentWritten(
         familyId,
         "Ny oppgave til godkjenning",
         `${taskLabel} er klar for godkjenning.`,
-        { link: `${APP_BASE_PATH}/parent/#pending-approval` }
+        {
+          link: withTrackingSource(
+            `${APP_BASE_PATH}/parent/#pending-approval`,
+            "task_pending_approval"
+          ),
+        }
       );
     }
   }
@@ -251,7 +264,12 @@ export const onTaskReviewedByParent = onDocumentWritten(
         familyId,
         "Oppgave godkjent ✅",
         `${taskLabel} ble godkjent.`,
-        { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
+        {
+          link: withTrackingSource(
+            `${APP_BASE_PATH}/child/#weekly-tasks`,
+            "task_approved"
+          ),
+        }
       );
       return;
     }
@@ -262,7 +280,12 @@ export const onTaskReviewedByParent = onDocumentWritten(
         familyId,
         "Oppgave trenger nytt forsok 🔁",
         `${taskLabel} ble ikke godkjent ennå.`,
-        { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
+        {
+          link: withTrackingSource(
+            `${APP_BASE_PATH}/child/#weekly-tasks`,
+            "task_rejected"
+          ),
+        }
       );
     }
   }
@@ -333,7 +356,12 @@ export const onWeeklyAllowanceUnlocked = onDocumentWritten(
       familyId,
       "Ukelonn opptjent 🎉",
       `Alle ${totalWeeklyTasks} ukesoppgaver er godkjent. Bra jobbet!`,
-      { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
+      {
+        link: withTrackingSource(
+          `${APP_BASE_PATH}/child/#weekly-tasks`,
+          "weekly_allowance_unlocked"
+        ),
+      }
     );
   }
 );
@@ -362,7 +390,12 @@ export const onBonusTaskCreated = onDocumentCreated(
       ? `${task.title ?? "Ny bonusoppgave"} (+kr ${task.valueNok})`
       : task.title ?? "Ny bonusoppgave";
 
-    await sendPushToChildren(familyId, title, body);
+    await sendPushToChildren(familyId, title, body, {
+      link: withTrackingSource(
+        `${APP_BASE_PATH}/child/#weekly-tasks`,
+        "bonus_task_created"
+      ),
+    });
   }
 );
 
@@ -380,7 +413,12 @@ export const weeklyReminderSunday = onSchedule(
       FAMILY_ID,
       "Ny uke – gå gjennom oppgaver og nullstill",
       "Planlegg uka med barnet ditt.",
-      { link: `${APP_BASE_PATH}/parent/` }
+      {
+        link: withTrackingSource(
+          `${APP_BASE_PATH}/parent/`,
+          "weekly_parent_reminder"
+        ),
+      }
     );
   }
 );
@@ -428,7 +466,12 @@ export const childDailyWeekdayReminder = onSchedule(
         familyId,
         "Husk dagens oppgaver ✅",
         "Åpne appen og kryss av når du er ferdig.",
-        { link: `${APP_BASE_PATH}/child/#weekly-tasks` }
+        {
+          link: withTrackingSource(
+            `${APP_BASE_PATH}/child/#weekly-tasks`,
+            "daily_child_reminder"
+          ),
+        }
       );
     }
   }
@@ -476,7 +519,12 @@ export const parentEveningPendingSummary = onSchedule(
         familyId,
         "Kveldssammendrag: godkjenning",
         body,
-        { link: `${APP_BASE_PATH}/parent/#pending-approval` }
+        {
+          link: withTrackingSource(
+            `${APP_BASE_PATH}/parent/#pending-approval`,
+            "parent_evening_summary"
+          ),
+        }
       );
     }
   }
