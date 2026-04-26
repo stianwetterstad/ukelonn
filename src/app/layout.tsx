@@ -6,10 +6,10 @@ import { PwaRegistration } from "./PwaRegistration";
 import { FCMInitializer } from "./FCMInitializer";
 
 export const metadata: Metadata = {
-  title: "Family Allowance App",
-  description: "Next.js TypeScript PWA starter for family allowance tracking",
+  title: "Almas ukelønn",
+  description: "Ukentlige oppgaver, bonusoppgaver og sparemål for Alma",
   manifest: "/ukelonn/manifest.webmanifest",
-  applicationName: "Family Allowance App",
+  applicationName: "Almas ukelønn",
   icons: {
     icon: [
       { url: `${APP_BASE_PATH}/icon-192.png`, sizes: "192x192", type: "image/png" },
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Ukelonn",
+    title: "Almas ukelønn",
   },
 };
 
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="no" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <TaskProvider>
           <PwaRegistration />

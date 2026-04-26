@@ -175,7 +175,16 @@ export default function ParentPage() {
     try {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
     } catch (err: unknown) {
-      setAuthError(err instanceof Error ? err.message : "Innlogging feilet");
+      const code = (err as { code?: string })?.code;
+      if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
+        setAuthError("Feil e-post eller passord. Prøv igjen.");
+      } else if (code === "auth/network-request-failed") {
+        setAuthError("Ingen nettverkstilkobling. Sjekk internett og prøv igjen.");
+      } else if (code === "auth/too-many-requests") {
+        setAuthError("For mange forsøk. Vent litt og prøv igjen.");
+      } else {
+        setAuthError("Innlogging feilet. Prøv igjen.");
+      }
     }
   }
 
@@ -242,23 +251,29 @@ export default function ParentPage() {
         <form onSubmit={handleLogin} className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
           <h1 className="mb-4 text-center text-xl font-bold text-pink-700">Forelder-innlogging 🔐</h1>
           {authError && (
-            <p className="mb-3 rounded-lg bg-red-100 px-3 py-2 text-sm text-red-700">{authError}</p>
+            <p role="alert" className="mb-3 rounded-lg bg-red-100 px-3 py-2 text-sm text-red-700">{authError}</p>
           )}
+          <label htmlFor="login-email" className="block text-xs font-semibold text-gray-600">E-post</label>
           <input
+            id="login-email"
             type="email"
-            placeholder="E-post"
+            placeholder="forelder@example.com"
             value={loginEmail}
             onChange={(e) => setLoginEmail(e.target.value)}
-            className="mb-3 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+            className="mb-4 mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
             required
+            autoComplete="email"
           />
+          <label htmlFor="login-password" className="block text-xs font-semibold text-gray-600">Passord</label>
           <input
+            id="login-password"
             type="password"
-            placeholder="Passord"
+            placeholder="••••••••"
             value={loginPassword}
             onChange={(e) => setLoginPassword(e.target.value)}
-            className="mb-4 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+            className="mb-5 mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
             required
+            autoComplete="current-password"
           />
           <button
             type="submit"
@@ -266,6 +281,12 @@ export default function ParentPage() {
           >
             Logg inn
           </button>
+          <a
+            href="https://alma.rocks"
+            className="mt-4 block text-center text-xs text-gray-400 hover:text-gray-600"
+          >
+            ← Tilbake til Alma
+          </a>
         </form>
       </main>
     );
@@ -276,7 +297,13 @@ export default function ParentPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col pb-10">
       {/* ── Header ── */}
-      <header className="bg-pink-400 px-4 py-3 text-center">
+      <header className="relative bg-pink-400 px-4 py-3 text-center">
+        <a
+          href="https://alma.rocks"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-pink-200 underline-offset-2 hover:text-white"
+        >
+          ← Alma
+        </a>
         <h1 className="text-xl font-extrabold uppercase tracking-wide text-white md:text-2xl">
           Forelder‑dashboard 👩‍👧
         </h1>

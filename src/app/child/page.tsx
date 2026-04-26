@@ -133,7 +133,11 @@ export default function ChildPage() {
           <h1 className="text-center text-xl font-bold text-pink-700">Lås opp barnesiden</h1>
           <p className="mt-2 text-center text-sm text-gray-500">Skriv inn 4-sifret PIN for å fortsette.</p>
 
+          <label htmlFor="pin-input" className="mt-4 block text-xs font-semibold text-gray-600">
+            PIN-kode
+          </label>
           <input
+            id="pin-input"
             autoFocus
             type="password"
             inputMode="numeric"
@@ -141,11 +145,11 @@ export default function ChildPage() {
             value={pinInput}
             onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
             placeholder="••••"
-            className="mt-4 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-center text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-pink-400"
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-center text-xl tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-pink-400"
           />
 
           {pinError && (
-            <p className="mt-2 text-center text-sm font-medium text-red-600">{pinError}</p>
+            <p role="alert" className="mt-2 text-center text-sm font-medium text-red-600">{pinError}</p>
           )}
 
           <button
@@ -153,17 +157,30 @@ export default function ChildPage() {
             disabled={pinBusy}
             className="mt-4 w-full rounded-lg bg-pink-500 py-2.5 text-sm font-bold text-white active:bg-pink-600 disabled:opacity-50"
           >
-            {pinBusy ? "Sjekker..." : "Lås opp"}
+            {pinBusy ? "Sjekker…" : "Lås opp"}
           </button>
+
+          <a
+            href="https://alma.rocks"
+            className="mt-4 block text-center text-xs text-gray-400 hover:text-gray-600"
+          >
+            ← Tilbake til Alma
+          </a>
         </form>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 md:px-8 md:py-8">
+    <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6 md:px-8 md:py-8">
       {/* ─── Top banner ─── */}
       <header className="rounded-t-2xl bg-pink-400 px-6 py-4 text-center md:py-5">
+        <a
+          href="https://alma.rocks"
+          className="absolute left-4 top-4 text-xs text-pink-200 underline-offset-2 hover:text-white md:text-sm"
+        >
+          ← Alma
+        </a>
         <h1 className="text-2xl font-extrabold uppercase tracking-wide text-white md:text-3xl">
           Almas ukelønn ✅
         </h1>
