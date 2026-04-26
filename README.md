@@ -145,7 +145,6 @@ Each deployment automatically verifies the following URLs (non-200 → workflow 
 | Page | URL |
 |---|---|
 | Home | `/ukelonn/` |
-| Prod Test | `/ukelonn/prod-test/` |
 | Parent | `/ukelonn/parent/` |
 | Child | `/ukelonn/child/` |
 
@@ -193,4 +192,3 @@ Before considering the production deployment complete, verify PWA and push notif
 **Full verification steps available in** [PUSH_NOTIFICATIONS.md](PUSH_NOTIFICATIONS.md#prod-test-steps)
 
 You can also use the debug page at **/debug** to view live PWA and FCM status (available on all environments).
-For a dedicated production test surface on real devices, use **/prod-test**.
