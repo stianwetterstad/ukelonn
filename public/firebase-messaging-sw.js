@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/fireba
 import {
   getMessaging,
   onBackgroundMessage,
-} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-messaging/sw.js";
+} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-messaging-sw.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCEXSpT2oODyKR9c4i320sItCgivkXqsxU",
